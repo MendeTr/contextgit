@@ -114,7 +114,7 @@ export class ContextEngine {
       previousSummary = head?.summary ?? ''
     }
 
-    const summary = this.summarizer.summarize(input.content, previousSummary, 'branch')
+    const summary = await this.summarizer.summarize(input.content, previousSummary, 'branch')
 
     return this.store.createCommit({
       branchId:     this.branchId,

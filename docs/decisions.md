@@ -63,3 +63,29 @@
 
 **Next:**
 - Start Days 8–9 (Week 2): `packages/core/src/summarizer.ts` — replace string truncation with `claude-haiku-4-5-20251001` via `@anthropic-ai/sdk`. Graceful fallback: if API call fails, revert to string truncation. Never let summarizer failure propagate to the caller. Add `ANTHROPIC_API_KEY` handling. Test: mock API failure → fallback summary still returned.
+
+---
+
+## Session: Days 8–9 — Claude Haiku Summarizer (2026-03-10) #3
+
+**Built:**
+- `packages/core/src/summarizer.ts` — `RollingSummarizer.summarize()` is now async; uses `claude-haiku-4-5` via `@anthropic-ai/sdk` when `ANTHROPIC_API_KEY` is present. Graceful fallback to string truncation on any error (API failure, no key, network issue). Response is sliced to `maxChars` budget after the Claude call.
+- `packages/core/src/summarizer.test.ts` — 7 tests: Claude success path, previous summary passed through, API failure → fallback, never throws, no-key → fallback, truncation tail-keeps-newest, Claude response truncated to budget.
+- `packages/core/package.json` — added `@anthropic-ai/sdk: ^0.40.1` to `dependencies`.
+- `packages/core/src/engine.ts` — `summarizer.summarize()` call updated to `await`.
+- `packages/store/src/local/queries.ts` — `selectCommits` and `selectLastCommit` sort keys extended with `rowid DESC` tiebreaker to fix non-deterministic ordering when two commits share the same millisecond timestamp.
+
+**Decided:**
+- **Inject `Anthropic` client via `SummarizerOptions.client`** — avoids environment coupling in tests; production path creates the client from `ANTHROPIC_API_KEY` automatically.
+- **`model: 'claude-haiku-4-5'`** — cheapest/fastest model, appropriate for compression; no thinking or streaming needed.
+- **`max_tokens: 1024`** — sufficient for summaries; both budget sizes (2000 / 8000 chars) fit within this token ceiling.
+- **`rowid DESC` tiebreaker on commit sort** — `Date.now()` collides at millisecond resolution in fast in-memory tests. `rowid` is always monotonically increasing so insertion order is preserved as a stable secondary sort.
+- **No changes to `ContextStore` interface** — `getFormattedSnapshot` and `createCommit` signatures unchanged; callers are unaffected by the sync→async transition inside `ContextEngine`.
+
+**Unresolved:**
+- `semanticSearch` still returns `[]` — needs `EmbeddingService` from `core/src/embeddings.ts` (Week 4).
+- `context('search' | 'commit' | 'raw')` scopes throw "not implemented" — Week 3/4 work.
+- No project-references in tsconfig — build-order dependency remains manual.
+
+**Next:**
+- Days 10–11 (Week 2 continued): wire the MCP server skeleton — `packages/mcp/src/server.ts` implementing the three core tools (`context`, `commit`, `search`) via `@modelcontextprotocol/sdk`. Validate with `mcp dev` inspector: tool list returned, `commit` persists a record, `context` returns a snapshot.
