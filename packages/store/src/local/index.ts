@@ -283,13 +283,13 @@ export class LocalStore implements ContextStore {
 
   // ─── Search ───────────────────────────────────────────────────────────────
 
-  semanticSearch(query: string, projectId: string, limit: number): Promise<SearchResult[]> {
-    // Embedding generation lives in core/embeddings.ts (Week 4).
-    // For now, return empty — the embedding vector must be passed in via the engine.
-    void query
-    void projectId
-    void limit
-    return Promise.resolve([])
+  indexEmbedding(commitId: string, vector: Float32Array): Promise<void> {
+    this.q.insertEmbedding(this.db, commitId, vector)
+    return Promise.resolve()
+  }
+
+  semanticSearch(vector: Float32Array, projectId: string, limit: number): Promise<SearchResult[]> {
+    return Promise.resolve(this.q.semanticSearch(this.db, vector, projectId, limit))
   }
 
   fullTextSearch(query: string, projectId: string): Promise<SearchResult[]> {

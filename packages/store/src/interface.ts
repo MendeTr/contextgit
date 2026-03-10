@@ -41,7 +41,10 @@ export interface ContextStore {
   listOpenThreadsByBranch(branchId: string): Promise<Thread[]>
 
   // Search
-  semanticSearch(query: string, projectId: string, limit: number): Promise<SearchResult[]>
+  // vector is a 384-dim Float32Array produced by EmbeddingService in core.
+  // Callers that cannot generate a vector should skip this and use fullTextSearch.
+  indexEmbedding(commitId: string, vector: Float32Array): Promise<void>
+  semanticSearch(vector: Float32Array, projectId: string, limit: number): Promise<SearchResult[]>
   fullTextSearch(query: string, projectId: string): Promise<SearchResult[]>
 
   // Agents

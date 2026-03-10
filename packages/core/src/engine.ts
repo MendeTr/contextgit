@@ -13,10 +13,12 @@ import type {
   Commit,
   CommitType,
   ContextScope,
+  SearchResult,
   SessionSnapshot,
   WorkflowType,
 } from './types.js'
 import { RollingSummarizer } from './summarizer.js'
+import { EmbeddingService } from './embeddings.js'
 
 // ─── Store subset the engine requires ─────────────────────────────────────────
 
@@ -35,6 +37,8 @@ export interface EngineStore {
   mergeBranch(sourceBranchId: string, targetBranchId: string, summary: string): Promise<Commit>
   getSessionSnapshot(projectId: string, branchId: string): Promise<SessionSnapshot>
   upsertAgent(agent: EngineAgentInput): Promise<unknown>
+  indexEmbedding(commitId: string, vector: Float32Array): Promise<void>
+  semanticSearch(vector: Float32Array, projectId: string, limit: number): Promise<SearchResult[]>
 }
 
 interface EngineCommitStoreInput {
@@ -75,12 +79,14 @@ export interface EngineCommitInput {
 
 export interface EngineOptions {
   summarizer?: RollingSummarizer
+  embeddingService?: EmbeddingService
 }
 
 export class ContextEngine {
   private projectId = ''
   private branchId  = ''
   private readonly summarizer: RollingSummarizer
+  private readonly embeddings: EmbeddingService | null
 
   constructor(
     private readonly store: EngineStore,
@@ -91,6 +97,7 @@ export class ContextEngine {
     options: EngineOptions = {},
   ) {
     this.summarizer = options.summarizer ?? new RollingSummarizer()
+    this.embeddings = options.embeddingService ?? null
   }
 
   /**
@@ -126,7 +133,7 @@ export class ContextEngine {
 
     const summary = await this.summarizer.summarize(input.content, previousSummary, 'branch')
 
-    return this.store.createCommit({
+    const commit = await this.store.createCommit({
       branchId:     this.branchId,
       agentId:      this.agentId,
       agentRole:    this.agentRole,
@@ -138,6 +145,16 @@ export class ContextEngine {
       commitType:   input.commitType ?? 'manual',
       threads:      input.threads,
     })
+
+    // Generate and index embedding asynchronously — never block the commit.
+    if (this.embeddings) {
+      const text = `${input.message}\n${input.content}`
+      this.embeddings.embed(text).then(vector => {
+        if (vector) return this.store.indexEmbedding(commit.id, vector)
+      }).catch(() => { /* swallow — indexing is best-effort */ })
+    }
+
+    return commit
   }
 
   /**
@@ -224,6 +241,18 @@ export class ContextEngine {
     }
 
     throw new Error(`context scope '${scope}' is not yet implemented`)
+  }
+
+  /**
+   * Semantic search over commits in the current project.
+   * Requires an EmbeddingService to have been passed at construction time;
+   * returns an empty array if embeddings are unavailable.
+   */
+  async semanticSearch(query: string, projectId: string, limit = 5): Promise<SearchResult[]> {
+    if (!this.embeddings) return []
+    const vector = await this.embeddings.embed(query)
+    if (!vector) return []
+    return this.store.semanticSearch(vector, projectId, limit)
   }
 
   private assertInitialized(): void {

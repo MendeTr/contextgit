@@ -18,7 +18,7 @@ import os from 'os'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
-import { ContextEngine } from '@contexthub/core'
+import { ContextEngine, EmbeddingService } from '@contexthub/core'
 import { LocalStore } from '@contexthub/store'
 import { loadConfig } from './config.js'
 import { AutoSnapshotManager } from './auto-snapshot.js'
@@ -83,6 +83,7 @@ async function bootstrap(): Promise<ServerContext> {
     config.agentRole ?? 'solo',
     'claude-code',
     config.workflowType ?? 'interactive',
+    { embeddingService: new EmbeddingService() },
   )
   await engine.init(projectId, branchId)
 
@@ -186,7 +187,7 @@ export async function createServer(): Promise<McpServer> {
   // ── context_search ───────────────────────────────────────────────────────────
   server.tool(
     'context_search',
-    'Search past context commits using full-text search.',
+    'Search past context commits. Uses semantic + full-text search and merges results.',
     {
       query: z.string().min(1).describe('Search query — natural language or keywords.'),
       limit: z.number().int().min(1).max(20).default(5).describe('Maximum results to return.'),
@@ -194,8 +195,18 @@ export async function createServer(): Promise<McpServer> {
     async ({ query, limit }) => {
       await autoSnapshot.onToolCall('context_search')
       try {
-        const results = await ctx.store.fullTextSearch(query, ctx.projectId)
-        const trimmed = results.slice(0, limit)
+        // Run semantic and full-text in parallel; merge by commit ID, dedup.
+        const [semantic, fts] = await Promise.all([
+          ctx.engine.semanticSearch(query, ctx.projectId, limit),
+          ctx.store.fullTextSearch(query, ctx.projectId),
+        ])
+        const seen = new Set<string>()
+        const merged = [...semantic, ...fts].filter(r => {
+          if (seen.has(r.commit.id)) return false
+          seen.add(r.commit.id)
+          return true
+        })
+        const trimmed = merged.slice(0, limit)
 
         if (trimmed.length === 0) {
           return {

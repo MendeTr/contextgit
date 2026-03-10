@@ -245,3 +245,33 @@
 
 **Next:**
 - Days 20–21 (Week 3 wrap-up): configure Claude Code MCP to load `packages/mcp/src/index.ts` for this repo. Validate `context_get` and `context_commit` work inside Claude Code. Then begin Week 4: `EmbeddingService` in `core/src/embeddings.ts` using `@xenova/transformers all-MiniLM-L6-v2`, wire into `engine.commit()`, enable `semanticSearch` in `LocalStore`.
+
+---
+
+## Session: Days 20–21 — MCP Config + EmbeddingService (2026-03-10) #9
+
+**Built:**
+- `~/.claude.json` — registered `contexthub` MCP server for the `/Users/mendetrajovski/contexthub` project: `node packages/mcp/dist/index.js` via stdio. Claude Code will now load the MCP server when working in this repo.
+- `packages/core/src/embeddings.ts` — `EmbeddingService` class: lazy-loads `Xenova/all-MiniLM-L6-v2` via `@xenova/transformers`, returns `Float32Array(384)` or `null` on any error. Pipeline loaded once and reused across all `embed()` calls.
+- `packages/core/src/embeddings.test.ts` — 5 tests: success path, load failure → null, inference failure → null, never throws, pipeline loaded only once.
+- `packages/core/src/engine.ts` — `ContextEngine` extended: `EngineOptions.embeddingService?`, `EngineStore.indexEmbedding()` + `EngineStore.semanticSearch()`. After `createCommit()`, embedding generated asynchronously (fire-and-forget, never blocks commit). New `engine.semanticSearch(query, projectId, limit)` method generates vector and delegates to store.
+- `packages/store/src/interface.ts` — `ContextStore.semanticSearch` signature changed from `(query: string, ...)` to `(vector: Float32Array, ...)`; `indexEmbedding(commitId, vector)` added.
+- `packages/store/src/local/index.ts` — `LocalStore.indexEmbedding()` calls `queries.insertEmbedding()`; `LocalStore.semanticSearch()` now calls `queries.semanticSearch()` with the provided vector (no longer returns `[]`).
+- `packages/mcp/src/server.ts` — `EmbeddingService` injected into `ContextEngine` at bootstrap; `context_search` tool now runs semantic + FTS in parallel, merges and deduplicates results by commit ID.
+- All 25 tests pass; `pnpm build` and `pnpm typecheck` clean.
+
+**Decided:**
+- **`semanticSearch` on `ContextStore` takes `Float32Array`, not `string`** — embedding generation lives in `core`; `store → core (types only)` constraint means the store cannot call `EmbeddingService`. The vector is produced by the engine and passed to the store. `Float32Array` is a native type — no import required.
+- **Embedding indexing is fire-and-forget in `engine.commit()`** — a `.then().catch()` chain ensures: (a) the commit is returned immediately, (b) indexing failures are swallowed, (c) the `never fail a COMMIT` invariant is preserved.
+- **`EmbeddingService.pipelineFactory` is injectable** — allows tests to inject a fake pipeline without loading the real model. Real model only loaded when `ANTHROPIC_API_KEY`-style lazy init is triggered in production.
+- **`context_search` merges semantic + FTS, deduplicates by `commit.id`** — semantic results ranked first (higher precision), FTS fills in remaining slots. `limit` applied after merge.
+- **`@xenova/transformers ^2.17.2`** added to `packages/core` dependencies.
+
+**Unresolved:**
+- MCP server not live-validated inside Claude Code yet — requires a Claude Code restart to pick up the new MCP config in `~/.claude.json`.
+- `server.tool()` 4-arg form in MCP SDK still deprecated (carried from Day 10).
+- `loadConfig()` called twice in `createServer()` — minor, deferred.
+- First call to `engine.semanticSearch()` will trigger model download (~25 MB) on cold start — no progress indicator; may time out on slow connections.
+
+**Next:**
+- Days 22–23 (Week 4 continued): validate MCP server live inside Claude Code (restart required). Then: `RemoteStore` stub in `packages/store/src/remote/` — implement `ContextStore` interface backed by HTTP fetch against the Express API. Wire into CLI and MCP via config `store: "http://..."`. Add integration test: LocalStore and RemoteStore produce identical snapshots for the same sequence of commits.
