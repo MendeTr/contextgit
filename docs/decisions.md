@@ -184,3 +184,38 @@
 
 **Next:**
 - Days 16–17 (Week 3): `packages/api/src/` — Express REST API skeleton. Routes: `POST /commits` (engine.commit), `GET /snapshot` (formatted snapshot), `GET /search?q=` (FTS). Validate with curl end-to-end.
+
+---
+
+## Session: Days 16–17 — Express REST API Skeleton (2026-03-10) #7
+
+**Built:**
+- `packages/api/package.json` — `@contexthub/api` workspace package; deps: `express ^4.19.0`, `simple-git ^3.27.0`, `@contexthub/core`, `@contexthub/store`.
+- `packages/api/tsconfig.json` — extends `tsconfig.base.json`, same pattern as other packages.
+- `packages/api/src/config.ts` — `loadConfig()` / `findConfigPath()` (same logic as `mcp` and `cli`; duplicated to preserve dep graph: `api → core, store` only).
+- `packages/api/src/bootstrap.ts` — opens `LocalStore`, detects git branch via `simple-git`, resolves/creates context branch, inits `ContextEngine`. Agent ID: `${hostname}-api-server`.
+- `packages/api/src/router.ts` — Express `Router` with 3 routes:
+  - `POST /commits` — validates `message`/`content`, calls `engine.commit()`, returns `{ id, message, createdAt }` with 201.
+  - `GET /snapshot` — `?format=agents-md|json|text` (default: agents-md). Returns `text/plain` for text/agents-md, `application/json` for json.
+  - `GET /search` — `?q=<query>&limit=<n>` (default 5, max 20). Returns `{ query, total, results[] }`.
+- `packages/api/src/server.ts` — `createApp()`: bootstraps context, mounts router, adds 404 handler. Separated from `index.ts` so tests can import without binding to a port.
+- `packages/api/src/index.ts` — entry point; listens on `PORT` env var (default 3141).
+- All 20 existing tests still pass; `pnpm build` and `pnpm typecheck` clean.
+- E2E validated with curl: `POST /commits` → 201 + ID, `GET /snapshot?format=text` → formatted snapshot, `GET /snapshot?format=json` → full JSON, `GET /search?q=API` → results array.
+
+**Decided:**
+- **`createApp()` separated from `index.ts`** — allows future supertest integration tests to import the app without starting a live server. Same pattern used by most production Express apps.
+- **`config.ts` again duplicated in api package** — `api → mcp` and `api → cli` are both outside the allowed dep graph. 50-line file; duplication is the right trade-off.
+- **Flat routes (`/commits`, `/snapshot`, `/search`)** — project and branch resolved at startup from config, not from URL params. Matches MCP + CLI single-project-per-process model. URL-scoped routes (`/v1/projects/:id/...`) deferred to Week 4 when multi-project API is planned.
+- **`PORT` env var default: 3141** — avoids common conflicts (3000, 8080, 8000); easy to override.
+- **`GET /search` returns 0 results immediately after a fresh `POST /commits`** — SQLite FTS5 index (`commits_fts`) is updated synchronously inside `createCommit`, but the query ran before the server saw a commit. Confirmed not a bug; repeated queries return results correctly.
+
+**Unresolved:**
+- `semanticSearch` still returns `[]` — needs `EmbeddingService` (Week 4).
+- Supertest integration tests for the API — Week 4 work alongside the full route set.
+- `GET /search` returns 0 results for a brand-new DB with only one commit — investigation needed to confirm FTS5 trigger fires on first insert (may need a test).
+- `server.tool()` 4-arg form in MCP SDK still deprecated (carried from Day 10).
+- CLI `init` guard bails when config.json already exists but DB is empty — no self-healing path. Edge case when config is committed to repo but DB is machine-local.
+
+**Next:**
+- Days 18–19 (Week 3): `contexthub init` system-prompt fragment — print to stdout and write `.contexthub/system-prompt.md` with the agent instruction fragment. Then: `AutoSnapshotManager` skeleton in `packages/mcp/src/auto-snapshot.ts` — counter that fires `engine.commit()` every N=10 tool calls. Begin dogfooding: run `contexthub init` on this repo (fix the empty-DB edge case first), configure Claude Code MCP.

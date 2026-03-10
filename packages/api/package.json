@@ -1,0 +1,21 @@
+{
+  "name": "@contexthub/api",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@contexthub/core": "workspace:*",
+    "@contexthub/store": "workspace:*",
+    "express": "^4.19.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}
