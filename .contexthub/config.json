@@ -1,0 +1,10 @@
+{
+  "project": "contexthub",
+  "projectId": "contexthub-001",
+  "store": "local",
+  "agentRole": "solo",
+  "workflowType": "interactive",
+  "autoSnapshot": true,
+  "snapshotInterval": 10,
+  "embeddingModel": "local"
+}
