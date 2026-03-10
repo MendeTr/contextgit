@@ -9,6 +9,7 @@
 
 import type {
   AgentRole,
+  Branch,
   Commit,
   CommitType,
   ContextScope,
@@ -19,10 +20,19 @@ import { RollingSummarizer } from './summarizer.js'
 
 // ─── Store subset the engine requires ─────────────────────────────────────────
 
+interface EngineBranchInput {
+  projectId: string
+  name: string
+  gitBranch: string
+  parentBranchId?: string
+}
+
 export interface EngineStore {
-  getBranch(id: string): Promise<{ headCommitId?: string } | null>
+  getBranch(id: string): Promise<{ headCommitId?: string; gitBranch?: string; name?: string } | null>
   getCommit(id: string): Promise<{ summary: string } | null>
+  createBranch(input: EngineBranchInput): Promise<Branch>
   createCommit(input: EngineCommitStoreInput): Promise<Commit>
+  mergeBranch(sourceBranchId: string, targetBranchId: string, summary: string): Promise<Commit>
   getSessionSnapshot(projectId: string, branchId: string): Promise<SessionSnapshot>
   upsertAgent(agent: EngineAgentInput): Promise<unknown>
 }
@@ -128,6 +138,75 @@ export class ContextEngine {
       commitType:   input.commitType ?? 'manual',
       threads:      input.threads,
     })
+  }
+
+  /**
+   * Create a new branch from the current branch.
+   * Writes a `branch-init` commit on the new branch carrying the parent HEAD
+   * summary forward so the branch starts with full context.
+   */
+  async branch(gitBranch: string, name?: string): Promise<Branch> {
+    this.assertInitialized()
+
+    // Carry parent HEAD summary into the new branch
+    const parentBranch = await this.store.getBranch(this.branchId)
+    let parentSummary = ''
+    if (parentBranch?.headCommitId) {
+      const head = await this.store.getCommit(parentBranch.headCommitId)
+      parentSummary = head?.summary ?? ''
+    }
+
+    const newBranch = await this.store.createBranch({
+      projectId: this.projectId,
+      name: name ?? gitBranch,
+      gitBranch,
+      parentBranchId: this.branchId,
+    })
+
+    // branch-init commit: carries parent summary, no rolling summarization needed
+    await this.store.createCommit({
+      branchId:     newBranch.id,
+      agentId:      this.agentId,
+      agentRole:    this.agentRole,
+      tool:         this.tool,
+      workflowType: this.workflowType,
+      message:      `Branch ${gitBranch} created from ${parentBranch?.gitBranch ?? this.branchId}`,
+      content:      parentSummary,
+      summary:      parentSummary,
+      commitType:   'branch-init',
+    })
+
+    return newBranch
+  }
+
+  /**
+   * Merge a source branch into the current branch.
+   * Generates a rolling summary for the merge commit, carries open threads
+   * from source to target, and marks the source branch as merged.
+   */
+  async merge(sourceBranchId: string): Promise<Commit> {
+    this.assertInitialized()
+
+    // Source HEAD summary
+    const sourceBranch = await this.store.getBranch(sourceBranchId)
+    let sourceSummary = ''
+    if (sourceBranch?.headCommitId) {
+      const head = await this.store.getCommit(sourceBranch.headCommitId)
+      sourceSummary = head?.summary ?? ''
+    }
+
+    // Target (current branch) HEAD summary as the rolling base
+    const targetBranch = await this.store.getBranch(this.branchId)
+    let targetSummary = ''
+    if (targetBranch?.headCommitId) {
+      const head = await this.store.getCommit(targetBranch.headCommitId)
+      targetSummary = head?.summary ?? ''
+    }
+
+    const mergeContent = `Merged ${sourceBranch?.name ?? sourceBranchId}: ${sourceSummary}`
+    const mergeSummary = await this.summarizer.summarize(mergeContent, targetSummary, 'branch')
+
+    return this.store.mergeBranch(sourceBranchId, this.branchId, mergeSummary)
   }
 
   /**

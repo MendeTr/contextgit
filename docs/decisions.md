@@ -120,3 +120,33 @@
 
 **Next:**
 - Days 12–13 (Week 2): `engine.branch()` — `store.createBranch()` + `branch-init` commit carrying parent HEAD summary forward. `engine.merge()` — merge commit, carry forward open threads from source branch, mark source branch `status: 'merged'`. Integration test: branch → 2 commits → merge → snapshot shows merged state and all threads.
+
+---
+
+## Session: Days 12–13 — engine.branch() + engine.merge() (2026-03-10) #5
+
+**Built:**
+- `packages/core/src/engine.ts` — two new `ContextEngine` methods:
+  - `branch(gitBranch, name?)` — calls `store.createBranch()` with `parentBranchId = this.branchId`, then writes a `branch-init` commit on the new branch carrying the parent HEAD summary forward (no rolling summarization on init — summary passed through verbatim).
+  - `merge(sourceBranchId)` — fetches source + target HEAD summaries, calls `summarizer.summarize(mergeContent, targetSummary, 'branch')` to produce the merge summary, then delegates to `store.mergeBranch()`. Thread carry-forward and branch status update handled transactionally inside `LocalStore.mergeBranch()`.
+- `EngineStore` interface extended with `createBranch(EngineBranchInput)` and `mergeBranch(sourceBranchId, targetBranchId, summary)`. `getBranch` return type widened to include `gitBranch?` and `name?` (needed for merge message). `LocalStore` satisfies structurally — no changes to store code required.
+- `packages/store/src/branch-merge.test.ts` — 3 integration tests:
+  1. Full flow: main commit + thread → branch → 2 feature commits + thread → merge → snapshot shows merge commit + both open threads carried to main.
+  2. `branch-init` commit carries exact parent HEAD summary into new branch.
+  3. Merge commit content includes source branch content; summary is non-empty.
+- All 20 tests pass; `pnpm build` and `pnpm typecheck` clean.
+
+**Decided:**
+- **`branch-init` summary passed through verbatim** — no summarization for init commits. The parent summary is already compressed; re-summarizing an empty "new" content with the parent as base would just return the parent unchanged anyway. Verbatim is cleaner and avoids an async call.
+- **`EngineStore` structural widening is non-breaking** — adding optional fields (`gitBranch?`, `name?`) to the `getBranch` return type is structurally safe; `LocalStore.getBranch()` returns `Branch` which has both fields.
+- **Thread carry-forward stays in `LocalStore.mergeBranch()`** — it's a transactional concern; engine should not orchestrate individual thread reassignments.
+- **`engine.merge(sourceBranchId)` not `engine.merge(sourceBranchId, targetBranchId)`** — the engine is already bound to a branch via `init()`; the target is always `this.branchId`. Explicit target would be redundant and error-prone.
+
+**Unresolved:**
+- `semanticSearch` still returns `[]` — needs `EmbeddingService` (Week 4).
+- `context('search' | 'commit' | 'raw')` scopes still throw "not implemented".
+- No project-references in tsconfig — build order still manual.
+- `server.tool()` 4-arg form in MCP SDK still deprecated (carried from Day 10).
+
+**Next:**
+- Days 14–15 (Week 3): `packages/cli/src/` — oclif CLI skeleton. Commands: `init` (creates `.contexthub/config.json` + project in DB), `commit` (engine.commit from CLI args), `context` (print formatted snapshot). Validate: `contexthub init`, `contexthub commit -m "msg"`, `contexthub context` all run end-to-end.
