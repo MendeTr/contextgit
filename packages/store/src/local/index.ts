@@ -30,63 +30,12 @@ import type {
   SnapshotFormat,
   Thread,
 } from '@contexthub/core'
+import { SnapshotFormatter } from '@contexthub/core'
 import type { ContextStore } from '../interface.js'
 import { runMigrations } from './migrations.js'
 import { Queries } from './queries.js'
 
-// ─── Snapshot formatter (inline, minimal — full formatter lives in core/snapshot.ts) ──
-
-function formatSnapshot(snapshot: SessionSnapshot, format: SnapshotFormat): string {
-  const { projectSummary, branchName, branchSummary, recentCommits, openThreads } = snapshot
-
-  if (format === 'json') {
-    return JSON.stringify(snapshot, null, 2)
-  }
-
-  if (format === 'agents-md') {
-    const commits = recentCommits
-      .map((c) => `- [${c.createdAt.toISOString()}] "${c.message}" by ${c.agentRole} via ${c.tool} (${c.workflowType})`)
-      .join('\n')
-    const threads = openThreads
-      .map((t) => `- [ ] ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`)
-      .join('\n')
-    return [
-      `## Project State`,
-      projectSummary || '(no summary yet)',
-      ``,
-      `## Current Branch: ${branchName}`,
-      branchSummary || '(no branch summary yet)',
-      ``,
-      `## Recent Activity`,
-      commits || '(no commits yet)',
-      ``,
-      `## Open Threads`,
-      threads || '(none)',
-    ].join('\n')
-  }
-
-  // text (default)
-  const commits = recentCommits
-    .map((c) => `[${c.createdAt.toISOString()}] "${c.message}"  by ${c.agentRole} via ${c.tool} (${c.workflowType})`)
-    .join('\n')
-  const threads = openThreads
-    .map((t) => `[ ] ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`)
-    .join('\n')
-
-  return [
-    `=== PROJECT STATE ===`,
-    projectSummary || '(no summary yet)',
-    ``,
-    `=== CURRENT BRANCH: ${branchName} ===`,
-    branchSummary || '(no branch summary yet)',
-    ``,
-    `=== LAST 3 COMMITS ===`,
-    commits || '(none)',
-    ``,
-    `=== OPEN THREADS ===`,
-    threads || '(none)',
-  ].join('\n')
-}
+const snapshotFormatter = new SnapshotFormatter()
 
 // ─── LocalStore ───────────────────────────────────────────────────────────────
 
@@ -308,7 +257,7 @@ export class LocalStore implements ContextStore {
   getFormattedSnapshot(projectId: string, branchId: string, format: SnapshotFormat): Promise<string> {
     try {
       const snapshot = this.q.getSessionSnapshot(projectId, branchId)
-      return Promise.resolve(formatSnapshot(snapshot, format))
+      return Promise.resolve(snapshotFormatter.format(snapshot, format))
     } catch (e) {
       return Promise.reject(e)
     }

@@ -35,3 +35,31 @@
 
 **Next:**
 - Start Days 5–7: `packages/core/src/engine.ts` — `ContextEngine.commit()` with placeholder string-truncation summarizer, `ContextEngine.context('global')` returning a `SessionSnapshot`. Wire `LocalStore` into the engine via constructor injection. Validate: create project → 2 commits (one with open thread) → `context('global')` → snapshot shows thread + both commits.
+
+---
+
+## Session: Days 5–7 — ContextEngine (2026-03-10) #2
+
+**Built:**
+- `packages/core/src/summarizer.ts` — `RollingSummarizer` class; Week 1 placeholder: appends new content to previous summary, truncates from the start to keep the most-recent work. Interface is stable for Week 2 Claude Haiku swap.
+- `packages/core/src/snapshot.ts` — `SnapshotFormatter` class; all 3 formats (`text`, `agents-md`, `json`). Moved out of the inline function in `LocalStore`.
+- `packages/core/src/threads.ts` — `ThreadManager` class; read-side helper enforcing the open-thread immune-to-compression boundary. Write-side (open/close) stays in `store.createCommit()` for transactional correctness.
+- `packages/core/src/engine.ts` — `ContextEngine`: `init(projectId, branchId)`, `commit(input)`, `context(scope)`. Uses `EngineStore` structural interface so core never imports from store (no circular deps).
+- `packages/core/src/index.ts` — updated barrel exports for all 4 new modules.
+- `packages/store/src/local/index.ts` — removed inline `formatSnapshot`; now imports and uses `SnapshotFormatter` from `@contexthub/core`.
+- `packages/store/src/engine-integration.test.ts` — 4 integration tests covering the Week 1 validation scenario, rolling summary accumulation, `context('branch')` parity, and uninitialized guard.
+
+**Decided:**
+- **`ContextEngine` accepts `EngineStore` structural interface** — core defines only the subset of methods it needs (`getBranch`, `getCommit`, `createCommit`, `getSessionSnapshot`, `upsertAgent`). `LocalStore` satisfies it without a direct import, preserving the strict dependency graph (`core` never imports `store`).
+- **`SnapshotFormatter` moved to core, `LocalStore` imports it** — store already depends on core for types; this is the correct layering. `getFormattedSnapshot` stays on `ContextStore` interface (callers don't change).
+- **`ThreadManager` is read-only** — write-side (open/close) is a transactional concern that belongs inside `store.createCommit()`. `ThreadManager` is purely a query helper.
+- **`context('branch')` delegates to same `getSessionSnapshot` as `'global'`** — branch-scoped view is distinct only in Week 2+ when branch summaries are computed separately. For now both return identical data.
+
+**Unresolved:**
+- `semanticSearch` still returns `[]` — needs `EmbeddingService` from `core/src/embeddings.ts` (Week 4).
+- `RollingSummarizer.summarize()` uses string truncation — Week 2 replaces with Claude Haiku + graceful fallback; no caller changes required.
+- `context('search' | 'commit' | 'raw')` scopes throw "not implemented" — Week 3/4 work.
+- No project-references in tsconfig — build-order dependency remains manual (`pnpm build` must run core before store).
+
+**Next:**
+- Start Days 8–9 (Week 2): `packages/core/src/summarizer.ts` — replace string truncation with `claude-haiku-4-5-20251001` via `@anthropic-ai/sdk`. Graceful fallback: if API call fails, revert to string truncation. Never let summarizer failure propagate to the caller. Add `ANTHROPIC_API_KEY` handling. Test: mock API failure → fallback summary still returned.
