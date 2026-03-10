@@ -219,3 +219,29 @@
 
 **Next:**
 - Days 18–19 (Week 3): `contexthub init` system-prompt fragment — print to stdout and write `.contexthub/system-prompt.md` with the agent instruction fragment. Then: `AutoSnapshotManager` skeleton in `packages/mcp/src/auto-snapshot.ts` — counter that fires `engine.commit()` every N=10 tool calls. Begin dogfooding: run `contexthub init` on this repo (fix the empty-DB edge case first), configure Claude Code MCP.
+
+---
+
+## Session: Days 18–19 — System-Prompt Fragment + AutoSnapshotManager (2026-03-10) #8
+
+**Built:**
+- `packages/cli/src/commands/init.ts` — self-heal: when `config.json` exists but DB is empty, reads the config, detects git branch, recreates project + branch in DB instead of bailing. Fixes the edge case where config is committed to the repo but DB is machine-local.
+- `packages/cli/src/commands/init.ts` — system-prompt fragment: after fresh init (or self-heal), writes `.contexthub/system-prompt.md` and prints the fragment to stdout. Fragment instructs agents to call `context_get scope=global` at session start and `context_commit` after significant work.
+- `packages/mcp/src/auto-snapshot.ts` — `AutoSnapshotManager` class: counts tool calls, fires `engine.commit({ commitType: 'auto' })` every N=10 non-commit calls. `context_commit` resets the counter. Auto-commit failures are swallowed — tool calls are never blocked.
+- `packages/mcp/src/server.ts` — `AutoSnapshotManager` wired in: instantiated after bootstrap, `autoSnapshot.onToolCall(toolName)` called in each of the three tool handlers.
+- **Dogfooded:** ran `contexthub init` on this repo (self-heal path triggered), then `contexthub commit` and `contexthub context` — full round-trip confirmed in the ContextHub DB.
+
+**Decided:**
+- **Self-heal uses `getBranchByGitName` as the DB health check** — if the git branch's context branch is found, initialization is complete; if not, recreate project + branch. This handles the common case (machine-local DB wiped or repo cloned fresh) without requiring a separate `getProject` method on the store interface.
+- **`AutoSnapshotManager` counts all tool calls except `context_commit`** — `context_get` and `context_search` count toward the interval because they indicate an active session. Only a manual `context_commit` (or auto-commit) resets the counter.
+- **`loadConfig()` called twice in `createServer()`** — once inside `bootstrap()` and once to read `snapshotInterval` for `AutoSnapshotManager`. Acceptable for a short-lived startup path; would refactor if config parsing became expensive.
+- **`commitType: 'auto'`** — auto-commits are distinguished from manual ones in the DB for observability. No other behavior change.
+
+**Unresolved:**
+- `semanticSearch` still returns `[]` — needs `EmbeddingService` (Week 4).
+- MCP server not yet validated with `mcp dev` inspector or Claude Code MCP config — the `.contexthub/system-prompt.md` exists but hasn't been added to Claude Code's MCP settings yet.
+- `server.tool()` 4-arg form in MCP SDK still deprecated (carried from Day 10).
+- `loadConfig()` called twice in `createServer()` — minor, deferred.
+
+**Next:**
+- Days 20–21 (Week 3 wrap-up): configure Claude Code MCP to load `packages/mcp/src/index.ts` for this repo. Validate `context_get` and `context_commit` work inside Claude Code. Then begin Week 4: `EmbeddingService` in `core/src/embeddings.ts` using `@xenova/transformers all-MiniLM-L6-v2`, wire into `engine.commit()`, enable `semanticSearch` in `LocalStore`.

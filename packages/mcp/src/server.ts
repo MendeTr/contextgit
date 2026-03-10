@@ -21,6 +21,7 @@ import { simpleGit } from 'simple-git'
 import { ContextEngine } from '@contexthub/core'
 import { LocalStore } from '@contexthub/store'
 import { loadConfig } from './config.js'
+import { AutoSnapshotManager } from './auto-snapshot.js'
 import type { ContextStore } from '@contexthub/store'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,6 +93,10 @@ async function bootstrap(): Promise<ServerContext> {
 
 export async function createServer(): Promise<McpServer> {
   const ctx = await bootstrap()
+  const config = loadConfig()
+  const autoSnapshot = new AutoSnapshotManager(ctx.engine, {
+    interval: config.snapshotInterval ?? 10,
+  })
 
   const server = new McpServer({
     name: 'contexthub',
@@ -111,6 +116,7 @@ export async function createServer(): Promise<McpServer> {
       ),
     },
     async ({ format }) => {
+      await autoSnapshot.onToolCall('context_get')
       try {
         const text = await ctx.store.getFormattedSnapshot(
           ctx.projectId,
@@ -145,6 +151,7 @@ export async function createServer(): Promise<McpServer> {
       ),
     },
     async ({ message, content, open_threads, close_thread_ids }) => {
+      await autoSnapshot.onToolCall('context_commit')
       try {
         const threads: { open?: string[]; close?: Array<{ id: string; note: string }> } = {}
         if (open_threads?.length) threads.open = open_threads
@@ -185,6 +192,7 @@ export async function createServer(): Promise<McpServer> {
       limit: z.number().int().min(1).max(20).default(5).describe('Maximum results to return.'),
     },
     async ({ query, limit }) => {
+      await autoSnapshot.onToolCall('context_search')
       try {
         const results = await ctx.store.fullTextSearch(query, ctx.projectId)
         const trimmed = results.slice(0, limit)
