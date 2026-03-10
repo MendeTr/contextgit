@@ -89,3 +89,34 @@
 
 **Next:**
 - Days 10–11 (Week 2 continued): wire the MCP server skeleton — `packages/mcp/src/server.ts` implementing the three core tools (`context`, `commit`, `search`) via `@modelcontextprotocol/sdk`. Validate with `mcp dev` inspector: tool list returned, `commit` persists a record, `context` returns a snapshot.
+
+---
+
+## Session: Days 10–11 — MCP Server Skeleton (2026-03-10) #4
+
+**Built:**
+- `packages/mcp/package.json` — `@contexthub/mcp` workspace package; deps: `@modelcontextprotocol/sdk ^1.0.0`, `simple-git ^3.27.0`, `zod ^3.23.0`, `@contexthub/core`, `@contexthub/store`.
+- `packages/mcp/tsconfig.json` — extends `tsconfig.base.json`, same pattern as core/store.
+- `packages/mcp/src/config.ts` — `loadConfig()` searches CWD upward for `.contexthub/config.json`, validates required `projectId`/`project` fields. Exports `ConfigNotFoundError`.
+- `packages/mcp/src/server.ts` — `createServer()` bootstraps `LocalStore` + `ContextEngine` then registers 3 tools on `McpServer`:
+  - `context_get` — calls `store.getFormattedSnapshot(projectId, branchId, format)`. Params: `scope` (global|branch, default global), `format` (agents-md|json|text, default agents-md).
+  - `context_commit` — calls `engine.commit({ message, content, threads })`. Params: `message`, `content`, optional `open_threads[]`, `close_thread_ids[]`.
+  - `context_search` — calls `store.fullTextSearch(query, projectId)`, slices to `limit`. Params: `query`, `limit` (1–20, default 5).
+- `packages/mcp/src/index.ts` — entry point; connects `McpServer` to `StdioServerTransport`, exits on fatal error.
+- All 17 existing tests still pass. `pnpm build` and `pnpm typecheck` clean.
+
+**Decided:**
+- **`McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`** — high-level API with Zod schemas. The 4-arg `(name, description, schema, cb)` overload is deprecated (hint only, not a build error); the non-deprecated 3-arg `(name, schema, annotations, cb)` form has no `description` field in annotations. Kept the deprecated form because it's the only way to pass a description string.
+- **Bootstrap at startup, not per-request** — `LocalStore`, `ContextEngine`, `projectId`, `branchId` all resolved once at process start. Git branch detected via `simple-git`. Context branch auto-created if not found in DB.
+- **Agent ID: `${hostname}-mcp-claude-code-interactive`** — deterministic, no auth. Matches Phase 1 agent identity strategy.
+- **`context_get` ignores `scope` for now** — always calls `getFormattedSnapshot` on the current branch; scope differentiation deferred to Week 3 when `engine.branch()` and proper multi-branch context are built.
+- **`context_search` uses `fullTextSearch` only** — semantic search still returns `[]`; FTS5 is ready and functional.
+
+**Unresolved:**
+- MCP server not yet validated with `mcp dev` inspector — requires a live `.contexthub/config.json` + project in DB. Validation deferred to when `contexthub init` CLI command is built (Days 18–19).
+- `server.tool()` 4-arg form is deprecated in `@modelcontextprotocol/sdk ^1.0.0` but no clean alternative supports a description string. May need SDK upgrade or monkey-patch workaround in Week 3.
+- `context_get` `scope` param is accepted but unused — full scope routing (branch-only vs global) is Week 3 work.
+- `semanticSearch` still returns `[]` — needs `EmbeddingService` (Week 4).
+
+**Next:**
+- Days 12–13 (Week 2): `engine.branch()` — `store.createBranch()` + `branch-init` commit carrying parent HEAD summary forward. `engine.merge()` — merge commit, carry forward open threads from source branch, mark source branch `status: 'merged'`. Integration test: branch → 2 commits → merge → snapshot shows merged state and all threads.
