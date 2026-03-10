@@ -118,6 +118,7 @@ export interface Agent {
 // ============================================
 
 export interface ProjectInput {
+  id?: string           // caller-supplied ID; LocalStore generates nanoid() if omitted
   name: string
   description?: string
   githubUrl?: string

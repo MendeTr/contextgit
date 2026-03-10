@@ -1,0 +1,56 @@
+// commit — record a context commit via engine.commit().
+
+import { Command, Flags } from '@oclif/core'
+import { bootstrap } from '../bootstrap.js'
+
+export default class CommitCmd extends Command {
+  static description = 'Record a context commit'
+
+  static flags = {
+    message: Flags.string({
+      char: 'm',
+      description: 'Short commit message (what was accomplished)',
+      required: true,
+    }),
+    content: Flags.string({
+      char: 'c',
+      description: 'Detailed commit content. Defaults to the message if omitted.',
+      required: false,
+    }),
+    thread: Flags.string({
+      char: 't',
+      description: 'Open a new thread (can be repeated)',
+      multiple: true,
+      required: false,
+    }),
+    close: Flags.string({
+      description: 'Close a thread by ID (can be repeated)',
+      multiple: true,
+      required: false,
+    }),
+  }
+
+  async run(): Promise<void> {
+    const { flags } = await this.parse(CommitCmd)
+    const ctx = await bootstrap()
+
+    const threads: {
+      open?: string[]
+      close?: Array<{ id: string; note: string }>
+    } = {}
+    if (flags.thread?.length) threads.open = flags.thread
+    if (flags.close?.length) {
+      threads.close = flags.close.map(id => ({ id, note: 'Closed via CLI' }))
+    }
+
+    const commit = await ctx.engine.commit({
+      message: flags.message,
+      content: flags.content ?? flags.message,
+      ...(Object.keys(threads).length > 0 ? { threads } : {}),
+    })
+
+    this.log(`Commit recorded.`)
+    this.log(`ID:      ${commit.id}`)
+    this.log(`Message: ${commit.message}`)
+  }
+}

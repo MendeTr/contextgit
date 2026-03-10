@@ -66,6 +66,7 @@ export interface Agent {
     createdAt: Date;
 }
 export interface ProjectInput {
+    id?: string;
     name: string;
     description?: string;
     githubUrl?: string;

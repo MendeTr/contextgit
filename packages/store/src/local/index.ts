@@ -77,7 +77,7 @@ export class LocalStore implements ContextStore {
 
   createProject(project: ProjectInput): Promise<Project> {
     try {
-      return Promise.resolve(this.q.insertProject({ id: nanoid(), ...project }))
+      return Promise.resolve(this.q.insertProject({ id: project.id ?? nanoid(), ...project }))
     } catch (e) {
       return Promise.reject(e)
     }

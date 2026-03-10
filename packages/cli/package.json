@@ -1,0 +1,28 @@
+{
+  "name": "@contexthub/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "contexthub": "./bin/run.js"
+  },
+  "oclif": {
+    "bin": "contexthub",
+    "dirname": "contexthub",
+    "commands": "./dist/commands"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@contexthub/core": "workspace:*",
+    "@contexthub/store": "workspace:*",
+    "@oclif/core": "^3.27.0",
+    "nanoid": "^5.0.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

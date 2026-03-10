@@ -150,3 +150,37 @@
 
 **Next:**
 - Days 14–15 (Week 3): `packages/cli/src/` — oclif CLI skeleton. Commands: `init` (creates `.contexthub/config.json` + project in DB), `commit` (engine.commit from CLI args), `context` (print formatted snapshot). Validate: `contexthub init`, `contexthub commit -m "msg"`, `contexthub context` all run end-to-end.
+
+---
+
+## Session: Days 14–15 — oclif CLI Skeleton (2026-03-10) #6
+
+**Built:**
+- `packages/cli/package.json` — `@contexthub/cli` workspace package; deps: `@oclif/core ^3.27.0`, `nanoid ^5.0.0`, `simple-git ^3.27.0`, `@contexthub/core`, `@contexthub/store`.
+- `packages/cli/tsconfig.json` — extends `tsconfig.base.json`, same pattern as other packages.
+- `packages/cli/bin/run.js` — oclif ESM entry point; calls `run(argv, import.meta.url)` + `flush()`.
+- `packages/cli/src/config.ts` — `loadConfig()` / `findConfigPath()` (same logic as `packages/mcp/src/config.ts`; duplicated to keep `cli → core, store` dep graph clean).
+- `packages/cli/src/bootstrap.ts` — shared setup for commit/context commands: loads config, opens `LocalStore`, detects git branch via `simple-git`, creates branch if missing, inits `ContextEngine`. Returns `{ engine, store, projectId, branchId }`.
+- `packages/cli/src/commands/init.ts` — `contexthub init [--name <name>]`: generates a `nanoid()` projectId, opens `LocalStore(projectId)`, calls `store.createProject({ id: projectId, name })` (same ID for DB path and project entity), creates initial branch, writes `.contexthub/config.json`. Guards against double-init.
+- `packages/cli/src/commands/commit.ts` — `contexthub commit -m <msg> [-c <content>] [-t <thread>...] [--close <id>...]`: bootstraps engine, calls `engine.commit()`.
+- `packages/cli/src/commands/context.ts` — `contexthub context [-f agents-md|json|text]`: loads config, opens store, detects branch, prints `store.getFormattedSnapshot()`.
+- `packages/core/src/types.ts` — added `id?: string` to `ProjectInput` (backward-compatible).
+- `packages/store/src/local/index.ts` — `createProject` now uses `input.id ?? nanoid()` so callers can supply a specific ID.
+- All 20 existing tests still pass; `pnpm build` and `pnpm typecheck` clean.
+- E2E validated: `contexthub init` → `contexthub commit -m "First commit"` → `contexthub context` all run end-to-end in a fresh tmp directory.
+
+**Decided:**
+- **`config.ts` duplicated in CLI** — MCP and CLI both need config loading, but `cli → mcp` is not in the allowed dep graph. The file is 50 lines; duplication is cheaper than a shared package or a cross-boundary import.
+- **`ProjectInput.id?` added to core types** — necessary for `init` to ensure the DB path key matches the project entity ID. `LocalStore.createProject` falls back to `nanoid()` if omitted, so all existing callers (tests, MCP) are unaffected.
+- **`bootstrap()` shared helper** — `commit` and `context` both need the same setup; extracted to avoid duplication. `init` does not use bootstrap (no config yet at that point).
+- **`context` command does not go through engine** — reads directly from `store.getFormattedSnapshot()` since no engine-level logic is needed for a read. Matches `context_get` MCP tool pattern.
+- **`commit --content` defaults to `--message`** — simple CLI ergonomics; power users can add richer content via `-c`.
+
+**Unresolved:**
+- `semanticSearch` still returns `[]` — needs `EmbeddingService` (Week 4).
+- `context('search' | 'commit' | 'raw')` scopes still throw "not implemented".
+- `server.tool()` 4-arg form in MCP SDK still deprecated (carried from Day 10).
+- CLI not yet installable globally (`npm link` / `pnpm link`) — needs bin shebang permissions (`chmod +x bin/run.js`) which aren't set by tsc.
+
+**Next:**
+- Days 16–17 (Week 3): `packages/api/src/` — Express REST API skeleton. Routes: `POST /commits` (engine.commit), `GET /snapshot` (formatted snapshot), `GET /search?q=` (FTS). Validate with curl end-to-end.
