@@ -2,7 +2,11 @@
   "name": "@contextgit/api",
   "version": "0.0.1",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/server.js",
+  "exports": {
+    ".": "./dist/server.js",
+    "./bin": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
