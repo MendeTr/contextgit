@@ -51,9 +51,7 @@ export default class PushCmd extends Command {
 
     const remoteUrl = flags.remote ?? config.remote
     if (!remoteUrl) {
-      this.error(
-        'No remote configured. Add "remote": "<url>" to .contextgit/config.json or pass --remote.',
-      )
+      this.error('No remote configured. Use: contextgit set-remote <url>', { exit: 1 })
     }
 
     const local = new LocalStore(config.projectId)
