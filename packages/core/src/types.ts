@@ -125,6 +125,7 @@ export interface ProjectInput {
 }
 
 export interface BranchInput {
+  id?: string           // caller-supplied ID; LocalStore generates nanoid() if omitted
   projectId: string
   name: string
   gitBranch: string
@@ -133,6 +134,7 @@ export interface BranchInput {
 }
 
 export interface CommitInput {
+  id?: string           // caller-supplied ID; LocalStore generates nanoid() if omitted
   branchId: string
   parentId?: string
   agentId: string
@@ -192,6 +194,7 @@ export interface ContextGitConfig {
   project: string
   projectId: string
   store: 'local' | string      // 'local' or remote URL
+  remote?: string              // remote ContextGit API URL for push/pull
   agentRole: AgentRole
   workflowType: WorkflowType
   autoSnapshot: boolean

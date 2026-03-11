@@ -1,0 +1,130 @@
+// pull — pull context commits from a remote ContextGit API server into local store.
+//
+// Requires `remote` in .contextgit/config.json.
+// Algorithm:
+//   1. Ensure project exists locally (by ID — already initialized)
+//   2. For each remote branch: ensure branch exists locally
+//   3. For each branch: collect remote commits not present locally, write them
+
+import { Command, Flags } from '@oclif/core'
+import { LocalStore, RemoteStore } from '@contextgit/store'
+import type { Pagination } from '@contextgit/core'
+import { loadConfig } from '../config.js'
+
+const PAGE = 100
+
+async function allCommits(
+  store: LocalStore | RemoteStore,
+  branchId: string,
+): Promise<import('@contextgit/core').Commit[]> {
+  const acc: import('@contextgit/core').Commit[] = []
+  let offset = 0
+  const pg: Pagination = { limit: PAGE, offset }
+  while (true) {
+    pg.offset = offset
+    const page = await store.listCommits(branchId, pg)
+    acc.push(...page)
+    if (page.length < PAGE) break
+    offset += PAGE
+  }
+  return acc
+}
+
+export default class PullCmd extends Command {
+  static description = 'Pull context commits from a remote ContextGit API'
+
+  static flags = {
+    remote: Flags.string({
+      char: 'r',
+      description: 'Remote API URL (overrides config.remote)',
+      required: false,
+    }),
+    'dry-run': Flags.boolean({
+      description: 'Show what would be pulled without writing locally',
+      default: false,
+    }),
+  }
+
+  async run(): Promise<void> {
+    const { flags } = await this.parse(PullCmd)
+    const config = loadConfig()
+
+    const remoteUrl = flags.remote ?? config.remote
+    if (!remoteUrl) {
+      this.error(
+        'No remote configured. Add "remote": "<url>" to .contextgit/config.json or pass --remote.',
+      )
+    }
+
+    const local = new LocalStore(config.projectId)
+    const remote = new RemoteStore(remoteUrl)
+    const dryRun = flags['dry-run']
+
+    // Verify project exists on remote
+    const remoteProject = await remote.getProject(config.projectId).catch(() => null)
+    if (!remoteProject) {
+      this.error(`Project ${config.projectId} not found on remote ${remoteUrl}. Push first.`)
+    }
+
+    // List all remote branches
+    const remoteBranches = await remote.listBranches(config.projectId)
+    let totalPulled = 0
+
+    for (const branch of remoteBranches) {
+      // Ensure branch exists locally
+      const localBranch = await local.getBranch(branch.id).catch(() => null)
+      if (!localBranch) {
+        if (!dryRun) {
+          await local.createBranch({
+            id: branch.id,
+            projectId: branch.projectId,
+            name: branch.name,
+            gitBranch: branch.gitBranch,
+            parentBranchId: branch.parentBranchId,
+          })
+        }
+        this.log(`[branch] ${dryRun ? 'would create' : 'created'}: ${branch.name}`)
+      }
+
+      // Collect local commit IDs for this branch
+      const localCommits = await allCommits(local, branch.id)
+      const localCommitIds = new Set(localCommits.map(c => c.id))
+
+      // Pull missing commits from remote
+      const remoteCommits = await allCommits(remote, branch.id)
+      const missing = remoteCommits.filter(c => !localCommitIds.has(c.id))
+
+      if (missing.length === 0) {
+        this.log(`[branch] ${branch.name}: up to date (${remoteCommits.length} commits)`)
+        continue
+      }
+
+      this.log(`[branch] ${branch.name}: pulling ${missing.length} commit(s)…`)
+
+      for (const commit of missing) {
+        if (!dryRun) {
+          await local.createCommit({
+            id: commit.id,
+            branchId: commit.branchId,
+            parentId: commit.parentId,
+            agentId: commit.agentId,
+            agentRole: commit.agentRole,
+            tool: commit.tool,
+            workflowType: commit.workflowType,
+            loopIteration: commit.loopIteration,
+            ciRunId: commit.ciRunId,
+            pipelineName: commit.pipelineName,
+            message: commit.message,
+            content: commit.content,
+            summary: commit.summary,
+            commitType: commit.commitType,
+            gitCommitSha: commit.gitCommitSha,
+          })
+        }
+        totalPulled++
+      }
+    }
+
+    this.log(`\nDone. ${dryRun ? '(dry run) ' : ''}${totalPulled} commit(s) pulled from ${remoteUrl}`)
+  }
+}
