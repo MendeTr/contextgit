@@ -29,6 +29,10 @@ Summarize the session and append to `docs/decisions.md` using this format:
 **Decided:** key decisions and why
 **Unresolved:** open questions or blockers
 **Next:** the first thing to do in the next session
+**Tokens:** total tokens used this session (check Claude Code session stats)
+**Ramp-up:** how many clarifying questions asked before starting real work
+**Time to first code:** time from session start to first real implementation
+
 ```
 
 Then commit everything:
