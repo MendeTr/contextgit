@@ -52,6 +52,8 @@ interface EngineCommitStoreInput {
   summary: string
   commitType: CommitType
   gitCommitSha?: string
+  ciRunId?: string
+  pipelineName?: string
   threads?: {
     open?: string[]
     close?: Array<{ id: string; note: string }>
@@ -73,6 +75,8 @@ export interface EngineCommitInput {
   content: string
   commitType?: CommitType
   gitCommitSha?: string
+  ciRunId?: string
+  pipelineName?: string
   threads?: {
     open?: string[]
     close?: Array<{ id: string; note: string }>
@@ -146,6 +150,8 @@ export class ContextEngine {
       summary,
       commitType:   input.commitType ?? 'manual',
       gitCommitSha: input.gitCommitSha,
+      ciRunId:      input.ciRunId,
+      pipelineName: input.pipelineName,
       threads:      input.threads,
     })
 

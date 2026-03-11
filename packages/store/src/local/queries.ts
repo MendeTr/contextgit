@@ -185,6 +185,7 @@ export class Queries {
     insertCommit: Statement
     selectCommit: Statement<[string]>
     selectCommits: Statement<[string, number, number]>
+    selectCommitsByRole: Statement<[string, string, number]>
     selectLastCommit: Statement<[string]>
 
     insertThread: Statement
@@ -245,6 +246,9 @@ export class Queries {
       selectCommit: db.prepare(`SELECT * FROM commits WHERE id = ?`),
       selectCommits: db.prepare(
         `SELECT * FROM commits WHERE branch_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`
+      ),
+      selectCommitsByRole: db.prepare(
+        `SELECT * FROM commits WHERE branch_id = ? AND agent_role = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`
       ),
       selectLastCommit: db.prepare(
         `SELECT * FROM commits WHERE branch_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`
@@ -555,7 +559,7 @@ export class Queries {
 
   // ─── Session snapshot helpers ─────────────────────────────────────────────
 
-  getSessionSnapshot(projectId: string, branchId: string): SessionSnapshot {
+  getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: string }): SessionSnapshot {
     // Project summary: head commit summary of the 'main' branch
     const mainBranch = this.getBranchByGitName(projectId, 'main')
       ?? this.getBranchByGitName(projectId, 'master')
@@ -570,8 +574,10 @@ export class Queries {
       ? (this.getCommit(branch.headCommitId)?.summary ?? '')
       : ''
 
-    // Last 3 commits on current branch
-    const recentCommits = this.listCommits(branchId, { limit: 3, offset: 0 })
+    // Last 3 commits on current branch (optionally filtered by agent role)
+    const recentCommits = options?.agentRole
+      ? (this.stmts.selectCommitsByRole.all(branchId, options.agentRole, 3) as CommitRow[]).map(toCommit)
+      : this.listCommits(branchId, { limit: 3, offset: 0 })
 
     // All open threads for the project
     const openThreads = this.listOpenThreads(projectId)

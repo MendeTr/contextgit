@@ -160,7 +160,8 @@ export function createStoreRouter(store: ContextStore): Router {
       const projectId = req.params['id']!
       const branchId = String(req.query['branchId'] ?? '')
       if (!branchId) { res.status(400).json({ error: "'branchId' query param required" }); return }
-      const result = await store.getSessionSnapshot(projectId, branchId)
+      const agentRole = req.query['agentRole'] ? String(req.query['agentRole']) : undefined
+      const result = await store.getSessionSnapshot(projectId, branchId, agentRole ? { agentRole: agentRole as import('@contextgit/core').AgentRole } : undefined)
       res.json(result)
     } catch (e) { err(res, e) }
   })

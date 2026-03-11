@@ -1,0 +1,40 @@
+# contextgit-ci.yml — template for capturing CI context into ContextGit.
+#
+# Copy this into your project's .github/workflows/ directory and set the
+# required secrets (see below). Commits are written with agentRole=ci so
+# they can be filtered from agent snapshots using:
+#   context_get agent_role=ci    (MCP)
+#   contextgit log --all         (CLI)
+
+name: ContextGit CI
+
+on: [push, pull_request]
+
+jobs:
+  capture-context:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install contextgit
+        run: npm install -g contextgit
+
+      - name: Capture CI context
+        run: |
+          contextgit commit \
+            -m "CI run ${{ github.run_number }}: ${{ github.event.head_commit.message }}" \
+            --ci-run-id "${{ github.run_id }}" \
+            --pipeline "${{ github.workflow }}"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONTEXTGIT_REMOTE: ${{ secrets.CONTEXTGIT_REMOTE_URL }}
+          CONTEXTGIT_API_KEY: ${{ secrets.CONTEXTGIT_API_KEY }}
+
+# Required secrets:
+#   ANTHROPIC_API_KEY      — for the rolling summarizer (Claude Haiku)
+#   CONTEXTGIT_REMOTE_URL  — URL of your ContextGit API server (from: contextgit serve)
+#   CONTEXTGIT_API_KEY     — API key (from: contextgit keygen --save)
