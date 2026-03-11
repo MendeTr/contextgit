@@ -347,3 +347,11 @@
 **Next:** Plan Phase 2 — RemoteStore, multi-agent, team support
 **Ramp-up:** 0
 **Time to first code:** ~3 min
+
+
+## Session: 2026-03-11 #N
+**Built:** Validated contextgit on Loqally. Initial architecture commit captured 7 open threads.
+**Decided:** CLAUDE.md session discipline added to loqally. claude-flow/ruv-swarm/flow-nexus removed.
+**Decided:** context_commit messages should include branch name and git commit hash manually until native git metadata capture is built into the MCP server (auto git rev-parse on commit — small task, ~30min).
+**Unresolved:** Native git metadata on context commits (branch + hash stored automatically in DB)
+**Next:** Run first full session in loqally using contextgit. Validate session 2 picks up from session 1 with zero ramp-up questions.
