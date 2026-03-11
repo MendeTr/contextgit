@@ -1,12 +1,17 @@
 import { describe, it, expect } from 'vitest'
+import { createHash } from 'crypto'
 import express from 'express'
 import http from 'http'
 import type { AddressInfo } from 'net'
 import { createAuthMiddleware } from './auth.js'
 
+function sha256hex(input: string): string {
+  return createHash('sha256').update(input, 'utf8').digest('hex')
+}
+
 async function startServer(apiKey: string | undefined): Promise<{ url: string; server: http.Server }> {
   const app = express()
-  app.use(createAuthMiddleware(apiKey))
+  app.use(createAuthMiddleware(apiKey ? sha256hex(apiKey) : undefined))
   app.get('/ping', (_req, res) => res.json({ ok: true }))
 
   const server = http.createServer(app)
