@@ -59,6 +59,7 @@ export class LocalStore implements ContextStore {
 
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
+    this.db.pragma('busy_timeout = 5000')
     this.db.pragma('foreign_keys = ON')
 
     // Attempt to load sqlite-vec extension — graceful failure if not available

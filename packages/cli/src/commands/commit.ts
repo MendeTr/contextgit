@@ -1,7 +1,16 @@
 // commit — record a context commit via engine.commit().
 
 import { Command, Flags } from '@oclif/core'
+import { simpleGit } from 'simple-git'
 import { bootstrap } from '../bootstrap.js'
+
+async function captureGitSha(cwd: string): Promise<string | undefined> {
+  try {
+    return (await simpleGit(cwd).revparse(['HEAD'])).trim()
+  } catch {
+    return undefined
+  }
+}
 
 export default class CommitCmd extends Command {
   static description = 'Record a context commit'
@@ -43,9 +52,11 @@ export default class CommitCmd extends Command {
       threads.close = flags.close.map(id => ({ id, note: 'Closed via CLI' }))
     }
 
+    const gitCommitSha = await captureGitSha(process.cwd())
     const commit = await ctx.engine.commit({
       message: flags.message,
       content: flags.content ?? flags.message,
+      gitCommitSha,
       ...(Object.keys(threads).length > 0 ? { threads } : {}),
     })
 
