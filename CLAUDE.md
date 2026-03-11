@@ -12,10 +12,14 @@ Branch: main
 Clone: git clone https://github.com/MendeTr/contexthub
 
 
+
 ## Session Start (do this every time)
-1. Read `docs/decisions.md` — find the last entry, read the **Next** line
-2. That is where we pick up. Do not re-do completed work.
-3. Read `docs/ContextHub_PHASE1_PLAN.md` if context on the full plan is needed
+1. Read `docs/decisions.md` — find the LAST entry, read **Next**
+2. Read `docs/ContextHub_PHASE1_PLAN.md` — know where today fits in the full plan
+3. Scan ALL previous **Decided** sections for anything relevant to today's work
+4. Read the actual source files you'll be touching before writing anything
+5. If unsure about architecture — read `docs/ContextHub_ARCHITECTURE_v3.md`
+6. Do not re-do completed work
 
 ## Session End (do this every time)
 Summarize the session and append to `docs/decisions.md` using this format:

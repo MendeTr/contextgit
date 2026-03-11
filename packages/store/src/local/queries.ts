@@ -601,7 +601,7 @@ export class Queries {
       const stmt = db.prepare(`
         SELECT c.*, bm25(commits_fts) AS score
         FROM commits_fts
-        JOIN commits c ON c.id = commits_fts.commit_id
+        JOIN commits c ON c.rowid = commits_fts.rowid
         JOIN branches b ON b.id = c.branch_id
         WHERE b.project_id = ?
           AND commits_fts MATCH ?

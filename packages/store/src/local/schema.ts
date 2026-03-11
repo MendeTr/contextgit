@@ -116,7 +116,21 @@ export const SCHEMA_V1_DDL = [
   ...CREATE_INDEXES,
 ]
 
+// Trigger to keep commits_fts in sync when rows are inserted into commits.
+// The FTS5 content table does NOT auto-index — the index must be maintained explicitly.
+export const CREATE_FTS_TRIGGER = `
+CREATE TRIGGER IF NOT EXISTS commits_ai AFTER INSERT ON commits BEGIN
+  INSERT INTO commits_fts(rowid, commit_id, message, content, summary)
+  VALUES (new.rowid, new.id, new.message, new.content, new.summary);
+END
+`
+
 // Migration v2 adds FTS5 + the vec0 table (attempted separately)
 export const SCHEMA_V2_DDL = [
   CREATE_COMMITS_FTS,
+]
+
+// Migration v3 adds the FTS trigger and rebuilds the index for any pre-existing rows
+export const SCHEMA_V3_DDL = [
+  CREATE_FTS_TRIGGER,
 ]

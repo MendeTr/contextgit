@@ -275,3 +275,34 @@
 
 **Next:**
 - Days 22–23 (Week 4 continued): validate MCP server live inside Claude Code (restart required). Then: `RemoteStore` stub in `packages/store/src/remote/` — implement `ContextStore` interface backed by HTTP fetch against the Express API. Wire into CLI and MCP via config `store: "http://..."`. Add integration test: LocalStore and RemoteStore produce identical snapshots for the same sequence of commits.
+
+---
+
+## Session: Days 22–23 — RemoteStore + FTS5 Fix (2026-03-11) #10
+
+**Built:**
+- `packages/api/src/store-router.ts` — Express router (`createStoreRouter(store)`) exposing all 20 `ContextStore` methods as HTTP endpoints at `/v1/store/...`. Covers projects, branches, commits, snapshots, threads, embeddings, search, and agents. Float32Array serialized as `number[]` for JSON transport.
+- `packages/store/src/remote/index.ts` — `RemoteStore` implementing `ContextStore` via `fetch` against the store router. Includes date-parsing helpers (JSON returns ISO strings; RemoteStore converts them back to `Date`). `Float32Array` serialized/deserialized for `indexEmbedding` and `semanticSearch`.
+- `packages/store/src/index.ts` — updated barrel export to include `RemoteStore`.
+- `packages/api/src/remote-store.test.ts` — 7 integration tests: project/branch CRUD, commit retrieval, formatted snapshot identical to LocalStore output, open thread round-trip, FTS search, mergeBranch thread carry-forward. All run against a live `http.createServer` on a random port backed by in-memory LocalStore.
+- `packages/store/src/local/schema.ts` — added `CREATE_FTS_TRIGGER` and `SCHEMA_V3_DDL`: `AFTER INSERT ON commits` trigger that inserts into `commits_fts` to maintain the FTS index.
+- `packages/store/src/local/migrations.ts` — migration v3 `fts_trigger`: applies the trigger and runs `INSERT INTO commits_fts(commits_fts) VALUES('rebuild')` to index any pre-existing rows.
+- `packages/store/src/local/queries.ts` — fixed `fullTextSearch` query: changed `JOIN commits c ON c.id = commits_fts.commit_id` → `ON c.rowid = commits_fts.rowid`. The content FTS5 table cannot read `commit_id` from `commits` (column named `id`, not `commit_id`); rowid-based join is correct for content tables.
+- **MCP confirmed live**: `mcp__contexthub__context_get`, `mcp__contexthub__context_commit`, `mcp__contexthub__context_search` visible in this Claude Code session — Gate 1 MCP validation passing.
+- All 32 tests pass; `pnpm build` and `pnpm typecheck` clean.
+
+**Decided:**
+- **`createStoreRouter(store)` in `packages/api`** — not mounted in the existing `createApp()` (which is project/branch-scoped at startup). The store router is project/branch-agnostic (callers pass IDs). Kept as a separate factory for use by integration tests and future multi-project server mode.
+- **Integration test in `packages/api/src/`** — needs both `express` (api dep) and `RemoteStore`/`LocalStore` (store dep). Keeping in api avoids adding express to store devDependencies. Cross-package relative imports avoided; `@contexthub/store` resolved from workspace dist after `pnpm build`.
+- **`afterAll` uses Promise-based cleanup** — Vitest's TypeScript types don't support the `done` callback pattern; `new Promise<void>(resolve => server.close(...resolve))` is the correct form.
+- **FTS5 content table bug fixed** — The original query joined on `commits_fts.commit_id` but `commits_fts` is a content table referencing `commits`; SQLite FTS5 fetches column values from the content table by column name, so `commit_id` was unresolvable (commits has `id`, not `commit_id`). Fix: join on `c.rowid = commits_fts.rowid` — always correct for content tables.
+- **Migration v3 adds trigger** — rather than an explicit FTS insert in `queries.insertCommit()`, a trigger covers ALL INSERT paths into `commits` (including `mergeBranch`). The `rebuild` command indexes pre-existing rows in upgraded DBs.
+
+**Unresolved:**
+- `RemoteStore` not yet wired into CLI/MCP bootstrap via `config.store = "http://..."`. Config type (`ContextHubConfig.store`) already supports this; bootstrap functions need a factory that checks `config.store !== 'local'` and creates `RemoteStore`. Deferred to Day 24.
+- `server.tool()` 4-arg form in MCP SDK still deprecated (carried from Day 10).
+- `loadConfig()` called twice in `createServer()` — minor, deferred.
+- Phase 1 gates (Gate 2 Ralph Loop, Gate 3 REST CI) not yet validated end-to-end.
+
+**Next:**
+- Day 24 (Week 4): wire `RemoteStore` into CLI/MCP bootstrap — check `config.store !== 'local'`, create `RemoteStore(config.store)` instead of `LocalStore`. Then run Phase 1 validation gates: Gate 2 (ralph-loop CLI), Gate 3 (REST API curl). Update npx packaging (`contexthub` bin entry in root package.json, `scripts/build.sh`).

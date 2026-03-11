@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
 
 interface MigrationRow {
   version: number
@@ -45,6 +45,22 @@ const MIGRATIONS: Migration[] = [
         db.exec(CREATE_COMMIT_EMBEDDINGS)
       } catch {
         // sqlite-vec not loaded; semantic search will return empty results
+      }
+    },
+  },
+  {
+    version: 3,
+    name: 'fts_trigger',
+    run(db) {
+      // Add INSERT trigger to keep commits_fts in sync with commits table.
+      // Then rebuild the index to pick up any rows inserted before this migration.
+      for (const sql of SCHEMA_V3_DDL) {
+        db.exec(sql)
+      }
+      try {
+        db.exec(`INSERT INTO commits_fts(commits_fts) VALUES('rebuild')`)
+      } catch {
+        // FTS5 table not available — skip rebuild
       }
     },
   },
