@@ -19,6 +19,10 @@ export default class LogCmd extends Command {
       description: 'Show commits across all branches',
       default: false,
     }),
+    branch: Flags.string({
+      char: 'b',
+      description: 'Show commits for a specific git branch name',
+    }),
     verbose: Flags.boolean({
       char: 'v',
       description: 'Show full commit content',
@@ -54,10 +58,11 @@ export default class LogCmd extends Command {
         this.printCommits(commits, flags.verbose)
       }
     } else {
-      const branch = await store.getBranchByGitName(config.projectId, gitBranch)
+      const targetGitBranch = flags.branch ?? gitBranch
+      const branch = await store.getBranchByGitName(config.projectId, targetGitBranch)
       if (!branch) {
         this.error(
-          `No context branch for git branch '${gitBranch}'. Run 'contextgit init' first.`,
+          `No context branch for git branch '${targetGitBranch}'. Run 'contextgit init' first.`,
         )
       }
 
