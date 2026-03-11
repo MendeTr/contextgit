@@ -133,6 +133,26 @@ export default class PushCmd extends Command {
       }
     }
 
-    this.log(`\nDone. ${dryRun ? '(dry run) ' : ''}${totalPushed} commit(s) pushed to ${remoteUrl}`)
+    // Thread sync: push open threads that are missing on remote
+    const localThreads = await local.listOpenThreads(config.projectId)
+    let remoteThreadIds: Set<string>
+    try {
+      const remoteThreads = await remote.listOpenThreads(config.projectId)
+      remoteThreadIds = new Set(remoteThreads.map(t => t.id))
+    } catch {
+      remoteThreadIds = new Set()
+    }
+    const missingThreads = localThreads.filter(t => !remoteThreadIds.has(t.id))
+    if (missingThreads.length > 0) {
+      this.log(`\n[threads] pushing ${missingThreads.length} open thread(s)…`)
+      for (const thread of missingThreads) {
+        if (!dryRun) {
+          await remote.syncThread(thread)
+        }
+        this.log(`  ${dryRun ? 'would push' : 'pushed'}: ${thread.description}`)
+      }
+    }
+
+    this.log(`\nDone. ${dryRun ? '(dry run) ' : ''}${totalPushed} commit(s), ${missingThreads.length} thread(s) pushed to ${remoteUrl}`)
   }
 }

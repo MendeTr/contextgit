@@ -33,6 +33,7 @@ import type {
   Pagination,
   ProjectInput,
   SnapshotFormat,
+  Thread,
 } from '@contextgit/core'
 
 function err(res: Response, e: unknown): void {
@@ -165,6 +166,16 @@ export function createStoreRouter(store: ContextStore): Router {
   })
 
   // ── Threads ───────────────────────────────────────────────────────────────
+
+  r.post('/threads', async (req: Request, res: Response) => {
+    try {
+      const body = req.body as Thread
+      // Parse createdAt from ISO string to Date
+      const thread: Thread = { ...body, createdAt: new Date(body.createdAt) }
+      const result = await store.syncThread(thread)
+      res.status(201).json(result)
+    } catch (e) { err(res, e) }
+  })
 
   r.get('/projects/:id/threads', async (req: Request, res: Response) => {
     try {
