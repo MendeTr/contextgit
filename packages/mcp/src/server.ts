@@ -18,7 +18,7 @@ import os from 'os'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
-import { ContextEngine, EmbeddingService } from '@contextgit/core'
+import { ContextEngine, EmbeddingService, SnapshotFormatter } from '@contextgit/core'
 import { LocalStore, RemoteStore } from '@contextgit/store'
 import { loadConfig } from './config.js'
 import { captureGitMetadata } from './git-sync.js'
@@ -126,15 +126,19 @@ export async function createServer(): Promise<McpServer> {
       format: z.enum(['agents-md', 'json', 'text']).default('agents-md').describe(
         'Output format. agents-md is optimized for agent consumption.',
       ),
+      agent_role: z.enum(['orchestrator','dev','test','review','background','ci','solo']).optional().describe(
+        'Filter recentCommits to this agent role only. Omit to return commits from all roles.',
+      ),
     },
-    async ({ format }) => {
+    async ({ format, agent_role }) => {
       await autoSnapshot.onToolCall('context_get')
       try {
-        const text = await ctx.store.getFormattedSnapshot(
+        const snapshot = await ctx.store.getSessionSnapshot(
           ctx.projectId,
           ctx.branchId,
-          format,
+          agent_role ? { agentRole: agent_role } : undefined,
         )
+        const text = new SnapshotFormatter().format(snapshot, format)
         return {
           content: [{ type: 'text', text }],
         }

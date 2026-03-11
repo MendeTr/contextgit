@@ -37,6 +37,16 @@ export default class CommitCmd extends Command {
       multiple: true,
       required: false,
     }),
+    'ci-run-id': Flags.string({
+      description: 'CI run ID (e.g. GitHub Actions run ID)',
+      required: false,
+      env: 'GITHUB_RUN_ID',
+    }),
+    pipeline: Flags.string({
+      description: 'CI pipeline / workflow name',
+      required: false,
+      env: 'GITHUB_WORKFLOW',
+    }),
   }
 
   async run(): Promise<void> {
@@ -57,6 +67,8 @@ export default class CommitCmd extends Command {
       message: flags.message,
       content: flags.content ?? flags.message,
       gitCommitSha,
+      ciRunId: flags['ci-run-id'],
+      pipelineName: flags.pipeline,
       ...(Object.keys(threads).length > 0 ? { threads } : {}),
     })
 

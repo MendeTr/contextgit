@@ -1,6 +1,7 @@
 import type {
   Agent,
   AgentInput,
+  AgentRole,
   Branch,
   BranchInput,
   Commit,
@@ -33,7 +34,7 @@ export interface ContextStore {
   listCommits(branchId: string, pagination: Pagination): Promise<Commit[]>
 
   // Snapshots
-  getSessionSnapshot(projectId: string, branchId: string): Promise<SessionSnapshot>
+  getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: AgentRole }): Promise<SessionSnapshot>
   getFormattedSnapshot(projectId: string, branchId: string, format: SnapshotFormat): Promise<string>
 
   // Threads
