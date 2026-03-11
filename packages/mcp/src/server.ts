@@ -74,6 +74,12 @@ async function bootstrap(): Promise<ServerContext> {
       ? new RemoteStore(config.store)
       : new LocalStore(projectId)
 
+  // Ensure the project row exists before creating branches (FK constraint)
+  const existing = await store.getProject(projectId)
+  if (!existing) {
+    await store.createProject({ id: projectId, name: config.project })
+  }
+
   const gitBranch = await detectGitBranch()
   const branchId = await resolveContextBranch(store, projectId, gitBranch)
 
