@@ -14,23 +14,17 @@ Clone: git clone https://github.com/MendeTr/contextgit
 
 
 ## Session Start (do this every time)
-1. Read `docs/decisions.md` — find the LAST entry, read **Next**
-2. Read `docs/ContextGit_PHASE2_PLAN.md` — know where today fits in the full plan
-3. Scan ALL previous **Decided** sections for anything relevant to today's work
-4. Read the actual source files you'll be touching before writing anything
-5. If unsure about architecture — read `docs/ContextGit_ARCHITECTURE_v3.md`
-6. Do not re-do completed work
+Call context_get with scope=global immediately.
+Do not read decisions.md. Do not ask questions first.
+Read the snapshot. Then start working.
 
 ## Session End (do this every time)
-Summarize the session and append to `docs/decisions.md` using this format:
-```
-## Session: <date> #<n>
-**Built:** what was implemented
-**Decided:** key decisions and why
-**Unresolved:** open questions or blockers
-**Next:** the first thing to do in the next session
-**Ramp-up:** how many clarifying questions asked before starting real work
-**Time to first code:** time from session start to first real implementation
+Call context_commit with:
+- what was built
+- key decisions and why
+- open threads
+- the first concrete task for the next session
+Then: git add . && git commit -m "..." && git push
 
 ```
 
