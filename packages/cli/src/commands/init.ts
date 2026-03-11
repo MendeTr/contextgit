@@ -7,6 +7,7 @@ import { nanoid } from 'nanoid'
 import { simpleGit } from 'simple-git'
 import { LocalStore } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
+import { installGitHooks } from '../git-hooks.js'
 
 const SYSTEM_PROMPT_FRAGMENT = `\
 You have access to ContextGit memory tools. At the start of every session, call
@@ -23,6 +24,10 @@ export default class Init extends Command {
       char: 'n',
       description: 'Project name (defaults to current directory name)',
       required: false,
+    }),
+    hooks: Flags.boolean({
+      description: 'Install git hooks to auto-capture context on every git commit',
+      default: false,
     }),
   }
 
@@ -63,6 +68,10 @@ export default class Init extends Command {
       this.log(`Recreated project "${existing.project}" (${existing.projectId}) for branch: ${gitBranch}`)
       this.log(`System prompt: .contextgit/system-prompt.md`)
       this.log(SYSTEM_PROMPT_FRAGMENT)
+      if (flags.hooks) {
+        installGitHooks(cwd)
+        this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
+      }
       return
     }
 
@@ -102,6 +111,13 @@ export default class Init extends Command {
     this.log(`Branch:      ${gitBranch}`)
     this.log(`Config:      .contextgit/config.json`)
     this.log(`DB:          ~/.contextgit/projects/${projectId}.db`)
+    this.log(``)
+    if (flags.hooks) {
+      installGitHooks(cwd)
+      this.log(`Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)`)
+    } else {
+      this.log(`Tip: run "contextgit init --hooks" to auto-capture context on every git commit`)
+    }
     this.log(``)
     this.log(`Add the following to your MCP system prompt (.contextgit/system-prompt.md):`)
     this.log(``)

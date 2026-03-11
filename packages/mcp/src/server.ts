@@ -21,8 +21,10 @@ import { simpleGit } from 'simple-git'
 import { ContextEngine, EmbeddingService } from '@contextgit/core'
 import { LocalStore, RemoteStore } from '@contextgit/store'
 import { loadConfig } from './config.js'
+import { captureGitMetadata } from './git-sync.js'
 import { AutoSnapshotManager } from './auto-snapshot.js'
 import type { ContextStore } from '@contextgit/store'
+import type { ContextGitConfig } from '@contextgit/core'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +65,7 @@ interface ServerContext {
   store: ContextStore
   projectId: string
   branchId: string
+  config: ContextGitConfig
 }
 
 async function bootstrap(): Promise<ServerContext> {
@@ -96,16 +99,15 @@ async function bootstrap(): Promise<ServerContext> {
   )
   await engine.init(projectId, branchId)
 
-  return { engine, store, projectId, branchId }
+  return { engine, store, projectId, branchId, config }
 }
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
 export async function createServer(): Promise<McpServer> {
   const ctx = await bootstrap()
-  const config = loadConfig()
   const autoSnapshot = new AutoSnapshotManager(ctx.engine, {
-    interval: config.snapshotInterval ?? 10,
+    interval: ctx.config.snapshotInterval ?? 10,
   })
 
   const server = new McpServer({
@@ -169,9 +171,11 @@ export async function createServer(): Promise<McpServer> {
           threads.close = close_thread_ids.map(id => ({ id, note: 'Closed via context_commit' }))
         }
 
+        const git = await captureGitMetadata(process.cwd())
         const commit = await ctx.engine.commit({
           message,
           content,
+          gitCommitSha: git?.sha,
           ...(Object.keys(threads).length > 0 ? { threads } : {}),
         })
 
@@ -239,6 +243,65 @@ export async function createServer(): Promise<McpServer> {
         const message = err instanceof Error ? err.message : String(err)
         return {
           content: [{ type: 'text', text: `Error searching commits: ${message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  // ── context_branch ───────────────────────────────────────────────────────────
+  server.tool(
+    'context_branch',
+    'Create a new context branch tracking a git branch. Call this when starting work on a new git branch.',
+    {
+      git_branch: z.string().min(1).describe('The git branch name to track.'),
+      name: z.string().optional().describe('Optional display name for the context branch.'),
+    },
+    async ({ git_branch, name }) => {
+      await autoSnapshot.onToolCall('context_branch')
+      try {
+        const branch = await ctx.engine.branch(git_branch, name)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Branch created.\nID:   ${branch.id}\nName: ${branch.name}`,
+            },
+          ],
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return {
+          content: [{ type: 'text', text: `Error creating branch: ${message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  // ── context_merge ────────────────────────────────────────────────────────────
+  server.tool(
+    'context_merge',
+    'Merge a source context branch into the current branch. Call this after merging a git branch.',
+    {
+      source_branch_id: z.string().min(1).describe('ID of the context branch to merge in.'),
+    },
+    async ({ source_branch_id }) => {
+      await autoSnapshot.onToolCall('context_merge')
+      try {
+        const commit = await ctx.engine.merge(source_branch_id)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Merge commit recorded.\nID: ${commit.id}`,
+            },
+          ],
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return {
+          content: [{ type: 'text', text: `Error merging branch: ${message}` }],
           isError: true,
         }
       }
