@@ -355,3 +355,16 @@
 **Decided:** context_commit messages should include branch name and git commit hash manually until native git metadata capture is built into the MCP server (auto git rev-parse on commit — small task, ~30min).
 **Unresolved:** Native git metadata on context commits (branch + hash stored automatically in DB)
 **Next:** Run first full session in loqally using contextgit. Validate session 2 picks up from session 1 with zero ramp-up questions.
+
+## Session: 2026-03-11 Phase 2 Kickoff
+**Built:** Nothing yet — planning session
+**Decided:** Phase 2 plan written and reviewed. Three updates added:
+  busy_timeout mitigation, atomic pull transaction, doctor check, localhost hosting note.
+  CLAUDE.md updated to point at Phase 2 plan.
+**Decided:** Remote hosting deferred to Phase 3 (Railway/fly.io). Localhost sufficient for Phase 2 validation.
+**Unresolved:** None — plan is locked and ready to build
+**Next:** Start Week 5. Build packages/mcp/src/git-sync.ts (captureGitMetadata + installGitHooks).
+  Then wire gitCommitSha and gitBranch into engine.commit() via MCP and CLI.
+  Then fix the double loadConfig() bug in mcp/src/server.ts.
+  Then add context_branch and context_merge MCP tools.
+**Next:** Run first full session in loqally using contextgit. Validate session 2 picks up from session 1 with zero ramp-up questions.
