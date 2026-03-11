@@ -25,7 +25,7 @@
 //   GET    /projects/:id/agents                   → listAgents
 
 import { Router, Request, Response } from 'express'
-import type { ContextStore } from '@contexthub/store'
+import type { ContextStore } from '@contextgit/store'
 import type {
   AgentInput,
   BranchInput,
@@ -33,7 +33,7 @@ import type {
   Pagination,
   ProjectInput,
   SnapshotFormat,
-} from '@contexthub/core'
+} from '@contextgit/core'
 
 function err(res: Response, e: unknown): void {
   const msg = e instanceof Error ? e.message : String(e)

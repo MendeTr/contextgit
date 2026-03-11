@@ -1,22 +1,22 @@
-// init — create .contexthub/config.json + project + branch in LocalStore.
+// init — create .contextgit/config.json + project + branch in LocalStore.
 
 import { Command, Flags } from '@oclif/core'
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
 import { nanoid } from 'nanoid'
 import { simpleGit } from 'simple-git'
-import { LocalStore } from '@contexthub/store'
-import type { ContextHubConfig } from '@contexthub/core'
+import { LocalStore } from '@contextgit/store'
+import type { ContextGitConfig } from '@contextgit/core'
 
 const SYSTEM_PROMPT_FRAGMENT = `\
-You have access to ContextHub memory tools. At the start of every session, call
+You have access to ContextGit memory tools. At the start of every session, call
 context_get with scope=global to load project state. After completing significant
 work, call context_commit with a message describing what was done and any open
 threads. Use context_branch before exploring risky changes.
 `
 
 export default class Init extends Command {
-  static description = 'Initialize ContextHub in this project'
+  static description = 'Initialize ContextGit in this project'
 
   static flags = {
     name: Flags.string({
@@ -29,17 +29,17 @@ export default class Init extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(Init)
     const cwd = process.cwd()
-    const configDir  = join(cwd, '.contexthub')
+    const configDir  = join(cwd, '.contextgit')
     const configPath = join(configDir, 'config.json')
     const promptPath = join(configDir, 'system-prompt.md')
 
     // ── Self-heal: config exists but DB may be empty ───────────────────────────
     if (existsSync(configPath)) {
-      let existing: ContextHubConfig
+      let existing: ContextGitConfig
       try {
-        existing = JSON.parse(readFileSync(configPath, 'utf8')) as ContextHubConfig
+        existing = JSON.parse(readFileSync(configPath, 'utf8')) as ContextGitConfig
       } catch {
-        this.error('Found .contexthub/config.json but could not parse it. Delete it and re-run init.')
+        this.error('Found .contextgit/config.json but could not parse it. Delete it and re-run init.')
       }
 
       const store = new LocalStore(existing.projectId)
@@ -47,7 +47,7 @@ export default class Init extends Command {
       const branch = await store.getBranchByGitName(existing.projectId, gitBranch)
 
       if (branch) {
-        this.log('ContextHub already initialized. Config found at .contexthub/config.json')
+        this.log('ContextGit already initialized. Config found at .contextgit/config.json')
         return
       }
 
@@ -61,7 +61,7 @@ export default class Init extends Command {
       })
       writeSystemPrompt(promptPath)
       this.log(`Recreated project "${existing.project}" (${existing.projectId}) for branch: ${gitBranch}`)
-      this.log(`System prompt: .contexthub/system-prompt.md`)
+      this.log(`System prompt: .contextgit/system-prompt.md`)
       this.log(SYSTEM_PROMPT_FRAGMENT)
       return
     }
@@ -84,7 +84,7 @@ export default class Init extends Command {
 
     // Write config
     mkdirSync(configDir, { recursive: true })
-    const config: ContextHubConfig = {
+    const config: ContextGitConfig = {
       project: projectName,
       projectId,
       store: 'local',
@@ -97,13 +97,13 @@ export default class Init extends Command {
     writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
     writeSystemPrompt(promptPath)
 
-    this.log(`Initialized ContextHub for project: ${projectName}`)
+    this.log(`Initialized ContextGit for project: ${projectName}`)
     this.log(`Project ID:  ${projectId}`)
     this.log(`Branch:      ${gitBranch}`)
-    this.log(`Config:      .contexthub/config.json`)
-    this.log(`DB:          ~/.contexthub/projects/${projectId}.db`)
+    this.log(`Config:      .contextgit/config.json`)
+    this.log(`DB:          ~/.contextgit/projects/${projectId}.db`)
     this.log(``)
-    this.log(`Add the following to your MCP system prompt (.contexthub/system-prompt.md):`)
+    this.log(`Add the following to your MCP system prompt (.contextgit/system-prompt.md):`)
     this.log(``)
     this.log(SYSTEM_PROMPT_FRAGMENT)
   }

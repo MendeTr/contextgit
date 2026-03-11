@@ -3,22 +3,22 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project
-ContextHub is a persistent memory layer for AI agent workflows — solving the 
+ContextGit is a persistent memory layer for AI agent workflows — solving the 
 "amnesia problem" where agents lose context between sessions.
 
 ## Repository
-GitHub: https://github.com/MendeTr/contexthub
+GitHub: https://github.com/MendeTr/contextgit
 Branch: main
-Clone: git clone https://github.com/MendeTr/contexthub
+Clone: git clone https://github.com/MendeTr/contextgit
 
 
 
 ## Session Start (do this every time)
 1. Read `docs/decisions.md` — find the LAST entry, read **Next**
-2. Read `docs/ContextHub_PHASE1_PLAN.md` — know where today fits in the full plan
+2. Read `docs/ContextGit_PHASE1_PLAN.md` — know where today fits in the full plan
 3. Scan ALL previous **Decided** sections for anything relevant to today's work
 4. Read the actual source files you'll be touching before writing anything
-5. If unsure about architecture — read `docs/ContextHub_ARCHITECTURE_v3.md`
+5. If unsure about architecture — read `docs/ContextGit_ARCHITECTURE_v3.md`
 6. Do not re-do completed work
 
 ## Session End (do this every time)
@@ -75,8 +75,8 @@ api → core, store, express
 ```
 
 ### Packages
-- **`@contexthub/core`** — types, engine, summarizer, snapshot formatter, embeddings
-- **`@contexthub/store`** — ContextStore interface + LocalStore (SQLite)
+- **`@contextgit/core`** — types, engine, summarizer, snapshot formatter, embeddings
+- **`@contextgit/store`** — ContextStore interface + LocalStore (SQLite)
 - **`packages/mcp`** — MCP server (Week 3)
 - **`packages/cli`** — oclif CLI (Week 3)
 - **`packages/api`** — Express REST API (Week 4)
@@ -94,7 +94,7 @@ api → core, store, express
 - `better-sqlite3` sync API wrapped in `Promise.resolve()` at interface boundary
 - Open threads **never** passed to summarizer — immune to compression guarantee
 - Never fail a COMMIT due to summarizer — graceful fallback always
-- DB path: `~/.contexthub/projects/<projectId>.db` — tests use `:memory:`
+- DB path: `~/.contextgit/projects/<projectId>.db` — tests use `:memory:`
 - sqlite-vec loaded via `createRequire` shim — load failure degrades gracefully
 
 ### Domain Model
@@ -113,6 +113,6 @@ Root vitest config collects `packages/*/src/**/*.test.ts`.
 
 ## Key Docs
 - `docs/decisions.md` — session history (read this first)
-- `docs/ContextHub_PHASE1_PLAN.md` — current build plan
-- `docs/ContextHub_ARCHITECTURE_v3.md` — full architecture
-- `docs/ContextHub_PRD_v4.md` — product requirements
+- `docs/ContextGit_PHASE1_PLAN.md` — current build plan
+- `docs/ContextGit_ARCHITECTURE_v3.md` — full architecture
+- `docs/ContextGit_PRD_v4.md` — product requirements

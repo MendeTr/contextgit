@@ -1,5 +1,5 @@
 {
-  "name": "@contexthub/api",
+  "name": "@contextgit/api",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,8 +8,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contexthub/core": "workspace:*",
-    "@contexthub/store": "workspace:*",
+    "@contextgit/core": "workspace:*",
+    "@contextgit/store": "workspace:*",
     "express": "^4.19.0",
     "simple-git": "^3.27.0"
   },

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// index.ts — entry point for the ContextHub MCP server process.
+// index.ts — entry point for the ContextGit MCP server process.
 // Started by the MCP host (Claude Desktop / Claude Code) via stdio.
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -14,6 +14,6 @@ async function main(): Promise<void> {
 }
 
 main().catch(err => {
-  console.error('[contexthub-mcp] Fatal error:', err)
+  console.error('[contextgit-mcp] Fatal error:', err)
   process.exit(1)
 })

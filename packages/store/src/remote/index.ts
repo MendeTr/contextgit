@@ -1,4 +1,4 @@
-// RemoteStore — ContextStore backed by HTTP fetch against the ContextHub store API.
+// RemoteStore — ContextStore backed by HTTP fetch against the ContextGit store API.
 //
 // All ContextStore methods map to endpoints on the /v1/store router.
 // Float32Array is serialized as number[] in JSON for transport.
@@ -18,7 +18,7 @@ import type {
   SessionSnapshot,
   SnapshotFormat,
   Thread,
-} from '@contexthub/core'
+} from '@contextgit/core'
 import type { ContextStore } from '../interface.js'
 
 // ─── Date parsers ─────────────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ export class RemoteStore implements ContextStore {
   private readonly base: string
 
   /**
-   * @param baseUrl  Root URL of a ContextHub API server, e.g. http://localhost:3141
+   * @param baseUrl  Root URL of a ContextGit API server, e.g. http://localhost:3141
    *                 The store router must be mounted at /v1/store on that server.
    */
   constructor(baseUrl: string) {

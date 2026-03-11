@@ -20,10 +20,10 @@ importers:
 
   packages/api:
     dependencies:
-      '@contexthub/core':
+      '@contextgit/core':
         specifier: workspace:*
         version: link:../core
-      '@contexthub/store':
+      '@contextgit/store':
         specifier: workspace:*
         version: link:../store
       express:
@@ -45,10 +45,10 @@ importers:
 
   packages/cli:
     dependencies:
-      '@contexthub/core':
+      '@contextgit/core':
         specifier: workspace:*
         version: link:../core
-      '@contexthub/store':
+      '@contextgit/store':
         specifier: workspace:*
         version: link:../store
       '@oclif/core':
@@ -92,10 +92,10 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@contexthub/core':
+      '@contextgit/core':
         specifier: workspace:*
         version: link:../core
-      '@contexthub/store':
+      '@contextgit/store':
         specifier: workspace:*
         version: link:../store
       '@modelcontextprotocol/sdk':
@@ -117,7 +117,7 @@ importers:
 
   packages/store:
     dependencies:
-      '@contexthub/core':
+      '@contextgit/core':
         specifier: workspace:*
         version: link:../core
       better-sqlite3:

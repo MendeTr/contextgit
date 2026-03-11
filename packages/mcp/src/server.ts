@@ -1,4 +1,4 @@
-// server.ts — ContextHub MCP Server
+// server.ts — ContextGit MCP Server
 //
 // Exposes three tools to Claude and other MCP clients:
 //   context_get    — return a formatted project snapshot
@@ -8,7 +8,7 @@
 // Transport: stdio (launched by the MCP host, e.g. Claude Desktop / Claude Code)
 //
 // Initialization (per server process):
-//   1. Load .contexthub/config.json (search from CWD upward)
+//   1. Load .contextgit/config.json (search from CWD upward)
 //   2. Open LocalStore for projectId
 //   3. Detect current git branch via simple-git
 //   4. Resolve (or create) the context branch for that git branch
@@ -18,11 +18,11 @@ import os from 'os'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
-import { ContextEngine, EmbeddingService } from '@contexthub/core'
-import { LocalStore, RemoteStore } from '@contexthub/store'
+import { ContextEngine, EmbeddingService } from '@contextgit/core'
+import { LocalStore, RemoteStore } from '@contextgit/store'
 import { loadConfig } from './config.js'
 import { AutoSnapshotManager } from './auto-snapshot.js'
-import type { ContextStore } from '@contexthub/store'
+import type { ContextStore } from '@contextgit/store'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ async function detectGitBranch(): Promise<string> {
 }
 
 /**
- * Resolve the ContextHub branch that tracks `gitBranch`.
+ * Resolve the ContextGit branch that tracks `gitBranch`.
  * Creates one if it doesn't exist yet.
  */
 async function resolveContextBranch(
@@ -103,7 +103,7 @@ export async function createServer(): Promise<McpServer> {
   })
 
   const server = new McpServer({
-    name: 'contexthub',
+    name: 'contextgit',
     version: '0.0.1',
   })
 

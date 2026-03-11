@@ -1,6 +1,6 @@
 {
-  "project": "contexthub",
-  "projectId": "contexthub-001",
+  "project": "contextgit",
+  "projectId": "contextgit-001",
   "store": "local",
   "agentRole": "solo",
   "workflowType": "interactive",

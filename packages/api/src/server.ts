@@ -1,4 +1,4 @@
-// server.ts — ContextHub REST API server
+// server.ts — ContextGit REST API server
 //
 // Creates and configures the Express app. Separated from index.ts so tests
 // can import createApp() without binding to a port.

@@ -4,7 +4,7 @@
 //           → merge back to main → snapshot shows merged state + all threads.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { ContextEngine } from '@contexthub/core'
+import { ContextEngine } from '@contextgit/core'
 import { LocalStore } from './local/index.js'
 
 describe('engine.branch() + engine.merge()', () => {
@@ -24,7 +24,7 @@ describe('engine.branch() + engine.merge()', () => {
 
   it('branch → 2 commits → merge → snapshot shows merged state and all threads', async () => {
     // 1. Setup: project + main branch
-    const project    = await store.createProject({ name: 'contexthub' })
+    const project    = await store.createProject({ name: 'contextgit' })
     const mainBranch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
     await mainEngine.init(project.id, mainBranch.id)
 

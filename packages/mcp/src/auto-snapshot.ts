@@ -10,7 +10,7 @@
 //   context_search  → counted
 //   any other tool  → counted (future tools)
 
-import type { ContextEngine } from '@contexthub/core'
+import type { ContextEngine } from '@contextgit/core'
 
 export interface AutoSnapshotOptions {
   /** Number of non-commit tool calls before an auto-commit fires. Default: 10. */

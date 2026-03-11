@@ -121,7 +121,7 @@ export interface SearchResult {
     score: number;
     matchType: 'semantic' | 'fulltext';
 }
-export interface ContextHubConfig {
+export interface ContextGitConfig {
     project: string;
     projectId: string;
     store: 'local' | string;
