@@ -15,7 +15,7 @@ Clone: git clone https://github.com/MendeTr/contextgit
 
 ## Session Start (do this every time)
 1. Read `docs/decisions.md` — find the LAST entry, read **Next**
-2. Read `docs/ContextGit_PHASE1_PLAN.md` — know where today fits in the full plan
+2. Read `docs/ContextGit_PHASE2_PLAN.md` — know where today fits in the full plan
 3. Scan ALL previous **Decided** sections for anything relevant to today's work
 4. Read the actual source files you'll be touching before writing anything
 5. If unsure about architecture — read `docs/ContextGit_ARCHITECTURE_v3.md`
