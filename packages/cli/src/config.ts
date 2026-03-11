@@ -1,7 +1,7 @@
 // config.ts — load and validate .contextgit/config.json
 // Searches from CWD upwards until it finds the config file.
 
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import type { ContextGitConfig } from '@contextgit/core'
 
@@ -50,4 +50,15 @@ export function loadConfig(startDir?: string): ContextGitConfig {
   }
 
   return config
+}
+
+/**
+ * Save updated config back to the config.json it was loaded from.
+ */
+export function saveConfig(updates: Partial<import('@contextgit/core').ContextGitConfig>, startDir?: string): void {
+  const configPath = findConfigPath(startDir)
+  const raw = readFileSync(configPath, 'utf-8')
+  const existing = JSON.parse(raw) as import('@contextgit/core').ContextGitConfig
+  const updated = { ...existing, ...updates }
+  writeFileSync(configPath, JSON.stringify(updated, null, 2) + '\n', 'utf-8')
 }
