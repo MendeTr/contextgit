@@ -252,4 +252,50 @@ describe('RemoteStore ↔ LocalStore integration', () => {
     expect(mainThreads).toHaveLength(1)
     expect(mainThreads[0].description).toBe('Thread from feat')
   })
+
+  it('syncThread is idempotent and round-trips via RemoteStore', async () => {
+    const project = await remote.createProject({ name: 'sync-thread-proj' })
+    const branch = await remote.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+
+    await remote.upsertAgent({
+      id: 'sync-agent',
+      projectId: project.id,
+      role: 'dev',
+      tool: 'test',
+      workflowType: 'interactive',
+    })
+
+    // Create a commit so we have a valid openedInCommit reference
+    const commit = await remote.createCommit({
+      branchId: branch.id,
+      agentId: 'sync-agent',
+      agentRole: 'dev',
+      tool: 'test',
+      workflowType: 'interactive',
+      message: 'Seed commit',
+      content: 'c',
+      summary: 's',
+      commitType: 'manual',
+    })
+
+    // Construct a Thread as if it came from another store (e.g. during push/pull)
+    const thread = await remote.syncThread({
+      id: 'sync-thread-id-1',
+      projectId: project.id,
+      branchId: branch.id,
+      description: 'Synced open question',
+      status: 'open',
+      openedInCommit: commit.id,
+      createdAt: new Date(),
+    })
+    expect(thread.id).toBe('sync-thread-id-1')
+    expect(thread.description).toBe('Synced open question')
+
+    // Idempotent: calling again should not throw
+    await expect(remote.syncThread(thread)).resolves.toBeDefined()
+
+    // Thread visible via listOpenThreads
+    const open = await remote.listOpenThreads(project.id)
+    expect(open.some(t => t.id === 'sync-thread-id-1')).toBe(true)
+  })
 })

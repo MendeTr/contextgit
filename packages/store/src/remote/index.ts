@@ -218,6 +218,11 @@ export class RemoteStore implements ContextStore {
     return raw.map(parseThread)
   }
 
+  async syncThread(thread: Thread): Promise<Thread> {
+    const raw = await this.req<Raw>('POST', `/threads`, thread)
+    return parseThread(raw)
+  }
+
   // ── Embeddings & Search ──────────────────────────────────────────────────────
 
   async indexEmbedding(commitId: string, vector: Float32Array): Promise<void> {

@@ -125,6 +125,21 @@ export default class PullCmd extends Command {
       }
     }
 
-    this.log(`\nDone. ${dryRun ? '(dry run) ' : ''}${totalPulled} commit(s) pulled from ${remoteUrl}`)
+    // Thread sync: pull open threads that are missing locally
+    const remoteThreads = await remote.listOpenThreads(config.projectId)
+    const localThreads = await local.listOpenThreads(config.projectId)
+    const localThreadIds = new Set(localThreads.map(t => t.id))
+    const missingThreads = remoteThreads.filter(t => !localThreadIds.has(t.id))
+    if (missingThreads.length > 0) {
+      this.log(`\n[threads] pulling ${missingThreads.length} open thread(s)…`)
+      for (const thread of missingThreads) {
+        if (!dryRun) {
+          await local.syncThread(thread)
+        }
+        this.log(`  ${dryRun ? 'would pull' : 'pulled'}: ${thread.description}`)
+      }
+    }
+
+    this.log(`\nDone. ${dryRun ? '(dry run) ' : ''}${totalPulled} commit(s), ${missingThreads.length} thread(s) pulled from ${remoteUrl}`)
   }
 }

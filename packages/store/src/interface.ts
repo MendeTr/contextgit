@@ -39,6 +39,7 @@ export interface ContextStore {
   // Threads
   listOpenThreads(projectId: string): Promise<Thread[]>
   listOpenThreadsByBranch(branchId: string): Promise<Thread[]>
+  syncThread(thread: Thread): Promise<Thread>
 
   // Search
   // vector is a 384-dim Float32Array produced by EmbeddingService in core.

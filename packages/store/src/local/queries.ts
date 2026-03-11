@@ -188,6 +188,7 @@ export class Queries {
     selectLastCommit: Statement<[string]>
 
     insertThread: Statement
+    syncThread: Statement
     closeThread: Statement<[string, string, string]>
     selectOpenThreads: Statement<[string]>
     selectOpenThreadsByBranch: Statement<[string]>
@@ -256,6 +257,14 @@ export class Queries {
            opened_in_commit, created_at)
         VALUES
           (@id, @project_id, @branch_id, @description, 'open', @workflow_type,
+           @opened_in_commit, @created_at)
+      `),
+      syncThread: db.prepare(`
+        INSERT OR IGNORE INTO threads
+          (id, project_id, branch_id, description, status, workflow_type,
+           opened_in_commit, created_at)
+        VALUES
+          (@id, @project_id, @branch_id, @description, @status, @workflow_type,
            @opened_in_commit, @created_at)
       `),
       closeThread: db.prepare(`
@@ -481,6 +490,20 @@ export class Queries {
       openedInCommit,
       createdAt: new Date(now),
     }
+  }
+
+  syncThread(thread: Thread): Thread {
+    this.stmts.syncThread.run({
+      id: thread.id,
+      project_id: thread.projectId,
+      branch_id: thread.branchId,
+      description: thread.description,
+      status: thread.status,
+      workflow_type: thread.workflowType ?? null,
+      opened_in_commit: thread.openedInCommit,
+      created_at: thread.createdAt.getTime(),
+    })
+    return thread
   }
 
   closeThread(threadId: string, closedInCommit: string, note: string): void {

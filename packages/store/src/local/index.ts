@@ -294,6 +294,14 @@ export class LocalStore implements ContextStore {
     }
   }
 
+  syncThread(thread: Thread): Promise<Thread> {
+    try {
+      return Promise.resolve(this.q.syncThread(thread))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
   // ─── Search ───────────────────────────────────────────────────────────────
 
   indexEmbedding(commitId: string, vector: Float32Array): Promise<void> {
