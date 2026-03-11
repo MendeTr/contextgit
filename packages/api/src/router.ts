@@ -1,4 +1,4 @@
-// router.ts — Express router for ContextHub REST API
+// router.ts — Express router for ContextGit REST API
 //
 // Routes:
 //   POST /commits  — engine.commit() — persist a context commit
@@ -7,7 +7,7 @@
 
 import { Router, Request, Response } from 'express'
 import type { ApiContext } from './bootstrap.js'
-import type { SnapshotFormat } from '@contexthub/core'
+import type { SnapshotFormat } from '@contextgit/core'
 
 export function createRouter(ctx: ApiContext): Router {
   const router = Router()

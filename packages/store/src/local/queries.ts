@@ -16,7 +16,7 @@ import type {
   SearchResult,
   SessionSnapshot,
   Thread,
-} from '@contexthub/core'
+} from '@contextgit/core'
 
 // ─── Row types (SQLite column names → snake_case) ───────────────────────────
 

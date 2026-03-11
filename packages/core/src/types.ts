@@ -188,7 +188,7 @@ export interface SearchResult {
 // Config
 // ============================================
 
-export interface ContextHubConfig {
+export interface ContextGitConfig {
   project: string
   projectId: string
   store: 'local' | string      // 'local' or remote URL

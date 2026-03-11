@@ -12,7 +12,7 @@ import type {
   SessionSnapshot,
   SnapshotFormat,
   Thread,
-} from '@contexthub/core'
+} from '@contextgit/core'
 
 export interface ContextStore {
   // Projects

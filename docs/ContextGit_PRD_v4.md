@@ -1,4 +1,4 @@
-# ContextHub
+# ContextGit
 ### The Memory Layer for AI Agent Workflows
 
 ---
@@ -49,19 +49,19 @@ Ralph solves the *execution loop* problem brilliantly. But `IMPLEMENTATION_PLAN.
 
 ### The Combination
 
-**ContextHub is the persistent institutional memory layer that every AI agent workflow is missing.**
+**ContextGit is the persistent institutional memory layer that every AI agent workflow is missing.**
 
 - GCC provides the proven context model — commits, branches, rolling summaries.
-- ContextHub builds the infrastructure, tooling, and platform around it — dual persistence, MCP server, REST API, web platform.
+- ContextGit builds the infrastructure, tooling, and platform around it — dual persistence, MCP server, REST API, web platform.
 - Every workflow — Ralph loops, interactive sessions, CI pipelines, multi-agent orchestration, custom frameworks — plugs into the same memory layer through the interface that fits them.
 
-The analogy to git is intentional. GCC gave us the commit model. Ralph proved that loops with persistent file state work at scale. ContextHub is the GitHub moment — making structured agent memory accessible, collaborative, and networked across every workflow.
+The analogy to git is intentional. GCC gave us the commit model. Ralph proved that loops with persistent file state work at scale. ContextGit is the GitHub moment — making structured agent memory accessible, collaborative, and networked across every workflow.
 
 ---
 
-## What is ContextHub
+## What is ContextGit
 
-ContextHub is the memory layer for AI agent workflows. It gives agents persistent, structured, shared memory across sessions, tools, loops, pipelines, and teams — regardless of how those agents are invoked.
+ContextGit is the memory layer for AI agent workflows. It gives agents persistent, structured, shared memory across sessions, tools, loops, pipelines, and teams — regardless of how those agents are invoked.
 
 There are three ways to think about it:
 
@@ -99,7 +99,7 @@ There are three ways to think about it:
 └────────────────────┘           └─────────────────────┘
                            │
 ┌──────────────────────────┴───────────────────────────────────────┐
-│  ContextHub Web Platform                                         │
+│  ContextGit Web Platform                                         │
 │  Explore repos | Branch viewer | Diff view | Search              │
 │  Clone context | Fork | Star | Team dashboards                   │
 └──────────────────────────────────────────────────────────────────┘
@@ -118,7 +118,7 @@ The brain. Structured context management through four git-like operations:
 
 **LocalStore (SQLite + sqlite-vec)** — Zero infrastructure. Ships with the binary. Works offline. For solo developers.
 
-**RemoteStore (Postgres + pgvector)** — Hosted by ContextHub or self-hosted. Concurrent writes, semantic search, scales. For teams and hosted pipelines.
+**RemoteStore (Postgres + pgvector)** — Hosted by ContextGit or self-hosted. Concurrent writes, semantic search, scales. For teams and hosted pipelines.
 
 One config field switches between them: `store: local` or `store: <remote-url>`.
 
@@ -130,7 +130,7 @@ Three ways agents connect, each suited to a different workflow:
 
 **REST API** — For automated pipelines, CI agents, custom frameworks (LangChain, CrewAI), and anything that isn't MCP-compatible. POST commits, GET snapshots, search context. Full feature parity with the MCP server.
 
-**CLI** — For Ralph-style loops and shell scripts. `contexthub snapshot` generates AGENTS.md. `contexthub commit` checkpoints from the command line. `contexthub clone` downloads a public context repository. Composable with any bash workflow.
+**CLI** — For Ralph-style loops and shell scripts. `contextgit snapshot` generates AGENTS.md. `contextgit commit` checkpoints from the command line. `contextgit clone` downloads a public context repository. Composable with any bash workflow.
 
 ### Layer 4 — Web Platform
 
@@ -142,7 +142,7 @@ A GitHub-like web application where developers browse, search, publish, and clon
 
 ### The Session Start Contract
 
-This is the most important mechanism in ContextHub. Whatever the workflow — an interactive session, a Ralph loop iteration, a CI pipeline run, a spawned sub-agent — the agent calls `context_get scope=global` and receives a compact, structured snapshot. Always the same shape. Always under 600 tokens. Regardless of whether the project has 5 commits or 500:
+This is the most important mechanism in ContextGit. Whatever the workflow — an interactive session, a Ralph loop iteration, a CI pipeline run, a spawned sub-agent — the agent calls `context_get scope=global` and receives a compact, structured snapshot. Always the same shape. Always under 600 tokens. Regardless of whether the project has 5 commits or 500:
 
 ```
 === PROJECT STATE ===
@@ -192,11 +192,11 @@ Unresolved decisions are never silently dropped by summary compression. They are
 
 ## Workflow Integrations
 
-ContextHub is workflow-agnostic. Here is how it plugs into each major pattern in use today.
+ContextGit is workflow-agnostic. Here is how it plugs into each major pattern in use today.
 
 ### 1. Interactive Sessions (Claude Code, Cursor, Codex)
 
-The largest segment of AI-assisted development today. Developer opens a tool, works for an hour, closes it. Next day, fresh context. ContextHub plugs in via the MCP server with zero workflow change.
+The largest segment of AI-assisted development today. Developer opens a tool, works for an hour, closes it. Next day, fresh context. ContextGit plugs in via the MCP server with zero workflow change.
 
 ```
 Session opens
@@ -214,18 +214,18 @@ No new commands to learn. No workflow changes. The MCP server handles everything
 
 ### 2. Ralph / Autonomous Loop
 
-Ralph's `while true` loop already solves the execution problem. ContextHub plugs in as the memory layer without changing the loop mechanics.
+Ralph's `while true` loop already solves the execution problem. ContextGit plugs in as the memory layer without changing the loop mechanics.
 
 ```bash
 while true; do
-  # Generate AGENTS.md from ContextHub snapshot
-  contexthub snapshot --format=agents-md > AGENTS.md
+  # Generate AGENTS.md from ContextGit snapshot
+  contextgit snapshot --format=agents-md > AGENTS.md
 
   # Run Ralph iteration (reads AGENTS.md + IMPLEMENTATION_PLAN.md as always)
   cat PROMPT.md | claude -p --dangerously-skip-permissions
 
   # Checkpoint context after iteration completes
-  contexthub commit "Loop iteration: $(git log -1 --pretty=%s)"
+  contextgit commit "Loop iteration: $(git log -1 --pretty=%s)"
 
   git push origin "$(git branch --show-current)"
 done
@@ -236,24 +236,24 @@ done
 - `AGENTS.md` is auto-generated from accumulated context — never manually maintained, never stale
 - Decisions, failed approaches, and architectural discoveries persist across loop restarts
 - When a second developer runs the same loop on the same project, their AGENTS.md reflects everything the first developer's loops discovered
-- The ContextHub web UI gives visibility into what the loop has been doing — branch tree, commit history, open threads — without reading raw git logs
+- The ContextGit web UI gives visibility into what the loop has been doing — branch tree, commit history, open threads — without reading raw git logs
 
-**What stays unchanged:** `IMPLEMENTATION_PLAN.md` remains entirely Ralph's domain. ContextHub does not touch it. Clean separation: Ralph owns task tracking, ContextHub owns institutional memory.
+**What stays unchanged:** `IMPLEMENTATION_PLAN.md` remains entirely Ralph's domain. ContextGit does not touch it. Clean separation: Ralph owns task tracking, ContextGit owns institutional memory.
 
 ### 3. CI / GitHub Actions Pipelines
 
-Agents running in CI — auto-fix failing tests, auto-review PRs, auto-generate docs — are stateless by design. Each run is a fresh environment. ContextHub gives these agents project knowledge without any manual setup.
+Agents running in CI — auto-fix failing tests, auto-review PRs, auto-generate docs — are stateless by design. Each run is a fresh environment. ContextGit gives these agents project knowledge without any manual setup.
 
 ```yaml
 # .github/workflows/ai-review.yml
 - name: Pull context snapshot
-  run: contexthub snapshot --project $PROJECT_ID --store $CONTEXTHUB_REMOTE_URL > AGENTS.md
+  run: contextgit snapshot --project $PROJECT_ID --store $CONTEXTHUB_REMOTE_URL > AGENTS.md
 
 - name: Run review agent
   run: cat prompts/review.md | claude -p --dangerously-skip-permissions
 
 - name: Commit agent findings
-  run: contexthub commit "CI review: PR #$PR_NUMBER findings" --store $CONTEXTHUB_REMOTE_URL
+  run: contextgit commit "CI review: PR #$PR_NUMBER findings" --store $CONTEXTHUB_REMOTE_URL
 ```
 
 Every CI run builds on what previous runs discovered. A flaky test pattern found in one run is committed to context. The next run that touches the same code area retrieves it automatically.
@@ -282,11 +282,11 @@ No agent is manually briefed. The context store is the shared brain.
 
 ### 5. Background Agents (Cursor, etc.)
 
-Background agents run autonomously while the developer is away. ContextHub gives them full project context at startup via the MCP server. Their findings are committed back, so when the developer returns and opens an interactive session the next morning, the session snapshot includes everything the background agent discovered overnight.
+Background agents run autonomously while the developer is away. ContextGit gives them full project context at startup via the MCP server. Their findings are committed back, so when the developer returns and opens an interactive session the next morning, the session snapshot includes everything the background agent discovered overnight.
 
 ### 6. Custom Agent Frameworks (LangChain, CrewAI, custom pipelines)
 
-Teams building their own agent pipelines call the ContextHub REST API directly. No MCP required.
+Teams building their own agent pipelines call the ContextGit REST API directly. No MCP required.
 
 ```python
 import requests
@@ -309,18 +309,18 @@ requests.post(
 )
 ```
 
-ContextHub becomes the memory backend for any orchestration framework, not just MCP-compatible tools.
+ContextGit becomes the memory backend for any orchestration framework, not just MCP-compatible tools.
 
 ---
 
 ## For the Open Source Ecosystem
 
-A developer building an open-source project publishes their context repository to ContextHub alongside their GitHub repo. The README links to both.
+A developer building an open-source project publishes their context repository to ContextGit alongside their GitHub repo. The README links to both.
 
-A new contributor clones the code from GitHub and the agent context from ContextHub. Their AI coding tool — whatever it is, whatever workflow they use — immediately understands the architecture, the conventions, the known failure modes, and the active development threads.
+A new contributor clones the code from GitHub and the agent context from ContextGit. Their AI coding tool — whatever it is, whatever workflow they use — immediately understands the architecture, the conventions, the known failure modes, and the active development threads.
 
 ```bash
-contexthub clone contexthub.dev/vercel/next.js-agent-context
+contextgit clone contextgit.dev/vercel/next.js-agent-context
 ```
 
 This is the flywheel. Every published context repository makes the platform more valuable. Every developer who clones a context repository has a reason to publish their own.
@@ -340,9 +340,9 @@ This is the flywheel. Every published context repository makes the platform more
 - Open threads as first-class data
 - Git branch auto-detection and hook installer
 - Local vector embeddings for semantic search
-- MCP server: `npx contexthub init`
+- MCP server: `npx contextgit init`
 - REST API: core context endpoints
-- CLI: `contexthub snapshot`, `contexthub commit`, `contexthub clone`
+- CLI: `contextgit snapshot`, `contextgit commit`, `contextgit clone`
 - Validate on a real project across two workflows: interactive session + Ralph loop
 
 **The validation gate:** Does the session start snapshot orient an agent without reading any other documentation? Is AGENTS.md generated from the snapshot useful in a Ralph loop? If no to either, fix before Phase 2.
@@ -403,12 +403,12 @@ This is the flywheel. Every published context repository makes the platform more
 
 AI platforms — Anthropic, OpenAI, Google — will each build proprietary context management for their own tools. They will not agree on a shared standard. This creates the exact fragmentation that existed before git unified version control.
 
-ContextHub is the neutral, open-source layer that works across all of them and all workflows. Claude Code uses it. Cursor uses it. A Ralph loop uses it. A GitHub Actions pipeline uses it. A LangChain agent uses it. Whatever ships next year uses it.
+ContextGit is the neutral, open-source layer that works across all of them and all workflows. Claude Code uses it. Cursor uses it. A Ralph loop uses it. A GitHub Actions pipeline uses it. A LangChain agent uses it. Whatever ships next year uses it.
 
 The moat is not the code — it is open source. The moat is:
 
 - **Accumulated knowledge** — A team's context repository is institutional memory. Migrating away means losing it.
-- **Workflow independence** — Works with every pattern, today and tomorrow. As new agent workflows emerge, ContextHub adds an integration interface. The memory layer stays the same.
+- **Workflow independence** — Works with every pattern, today and tomorrow. As new agent workflows emerge, ContextGit adds an integration interface. The memory layer stays the same.
 - **Network effects** — Public context repositories create discovery and sharing loops across the ecosystem.
 - **Community contributions** — Context templates, workflow-specific integrations, best practices contributed by the community compound over time.
 
@@ -432,7 +432,7 @@ Public context repositories are always free. The network effect depends on it.
 
 ## Open Source Strategy
 
-ContextHub is built on GCC/Aline (MIT licensed):
+ContextGit is built on GCC/Aline (MIT licensed):
 
 - **Credit prominently** — Acknowledge GCC/Aline in the README, docs, and website.
 - **Contribute upstream** — Generic improvements to the context engine go back to GCC.

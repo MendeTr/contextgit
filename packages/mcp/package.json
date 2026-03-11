@@ -1,5 +1,5 @@
 {
-  "name": "@contexthub/mcp",
+  "name": "@contextgit/mcp",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,15 +11,15 @@
     }
   },
   "bin": {
-    "contexthub-mcp": "./dist/index.js"
+    "contextgit-mcp": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contexthub/core": "workspace:*",
-    "@contexthub/store": "workspace:*",
+    "@contextgit/core": "workspace:*",
+    "@contextgit/store": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "simple-git": "^3.27.0",
     "zod": "^3.23.0"

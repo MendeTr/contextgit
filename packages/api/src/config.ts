@@ -1,13 +1,13 @@
-// config.ts — load and validate .contexthub/config.json
+// config.ts — load and validate .contextgit/config.json
 // Searches from CWD upwards until it finds the config file.
 
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
-import type { ContextHubConfig } from '@contexthub/core'
+import type { ContextGitConfig } from '@contextgit/core'
 
 export class ConfigNotFoundError extends Error {
   constructor(startDir: string) {
-    super(`No .contexthub/config.json found searching upward from: ${startDir}`)
+    super(`No .contextgit/config.json found searching upward from: ${startDir}`)
     this.name = 'ConfigNotFoundError'
   }
 }
@@ -15,7 +15,7 @@ export class ConfigNotFoundError extends Error {
 export function findConfigPath(startDir: string = process.cwd()): string {
   let current = startDir
   while (true) {
-    const candidate = join(current, '.contexthub', 'config.json')
+    const candidate = join(current, '.contextgit', 'config.json')
     try {
       readFileSync(candidate)
       return candidate
@@ -29,10 +29,10 @@ export function findConfigPath(startDir: string = process.cwd()): string {
   }
 }
 
-export function loadConfig(startDir?: string): ContextHubConfig {
+export function loadConfig(startDir?: string): ContextGitConfig {
   const configPath = findConfigPath(startDir)
   const raw = readFileSync(configPath, 'utf-8')
-  const config = JSON.parse(raw) as ContextHubConfig
+  const config = JSON.parse(raw) as ContextGitConfig
 
   if (!config.projectId) {
     throw new Error(`Invalid config at ${configPath}: missing required field 'projectId'`)

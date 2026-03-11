@@ -3,9 +3,9 @@
 
 import os from 'os'
 import { simpleGit } from 'simple-git'
-import { ContextEngine } from '@contexthub/core'
-import { LocalStore, RemoteStore } from '@contexthub/store'
-import type { ContextStore } from '@contexthub/store'
+import { ContextEngine } from '@contextgit/core'
+import { LocalStore, RemoteStore } from '@contextgit/store'
+import type { ContextStore } from '@contextgit/store'
 import { loadConfig } from './config.js'
 
 export interface CliContext {
@@ -59,7 +59,7 @@ export async function bootstrap(): Promise<CliContext> {
     store,
     agentId,
     config.agentRole ?? 'solo',
-    'contexthub-cli',
+    'contextgit-cli',
     config.workflowType ?? 'interactive',
   )
   await engine.init(projectId, branchId)

@@ -5,7 +5,7 @@
 //   • The ContextStore interface returns Promises, so we wrap at the boundary
 //     with Promise.resolve() / Promise.reject().
 //   • IDs are nanoid() TEXT — never auto-increment integers.
-//   • DB path: ~/.contexthub/projects/<projectId>.db
+//   • DB path: ~/.contextgit/projects/<projectId>.db
 
 import { homedir } from 'os'
 import { mkdirSync } from 'fs'
@@ -29,8 +29,8 @@ import type {
   SessionSnapshot,
   SnapshotFormat,
   Thread,
-} from '@contexthub/core'
-import { SnapshotFormatter } from '@contexthub/core'
+} from '@contextgit/core'
+import { SnapshotFormatter } from '@contextgit/core'
 import type { ContextStore } from '../interface.js'
 import { runMigrations } from './migrations.js'
 import { Queries } from './queries.js'
@@ -52,7 +52,7 @@ export class LocalStore implements ContextStore {
     if (projectId === ':memory:') {
       dbPath = ':memory:'
     } else {
-      const dir = join(homedir(), '.contexthub', 'projects')
+      const dir = join(homedir(), '.contextgit', 'projects')
       mkdirSync(dir, { recursive: true })
       dbPath = join(dir, `${projectId}.db`)
     }
@@ -147,7 +147,7 @@ export class LocalStore implements ContextStore {
           parentId: targetBranch.headCommitId,
           agentId: 'system',
           agentRole: 'orchestrator',
-          tool: 'contexthub',
+          tool: 'contextgit',
           workflowType: 'interactive',
           message: `Merge ${sourceBranch.name} into ${targetBranch.name}`,
           content: summary,

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import express from 'express'
 import http from 'http'
 import type { AddressInfo } from 'net'
-import { LocalStore, RemoteStore } from '@contexthub/store'
+import { LocalStore, RemoteStore } from '@contextgit/store'
 import { createStoreRouter } from './store-router.js'
 
 describe('RemoteStore ↔ LocalStore integration', () => {

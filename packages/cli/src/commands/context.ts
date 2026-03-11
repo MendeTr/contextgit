@@ -2,8 +2,8 @@
 
 import { Command, Flags } from '@oclif/core'
 import { simpleGit } from 'simple-git'
-import { LocalStore } from '@contexthub/store'
-import type { SnapshotFormat } from '@contexthub/core'
+import { LocalStore } from '@contextgit/store'
+import type { SnapshotFormat } from '@contextgit/core'
 import { loadConfig } from '../config.js'
 
 export default class ContextCmd extends Command {
@@ -35,7 +35,7 @@ export default class ContextCmd extends Command {
     const branch = await store.getBranchByGitName(config.projectId, gitBranch)
     if (!branch) {
       this.error(
-        `No context branch found for git branch '${gitBranch}'. Run 'contexthub init' first.`,
+        `No context branch found for git branch '${gitBranch}'. Run 'contextgit init' first.`,
       )
     }
 

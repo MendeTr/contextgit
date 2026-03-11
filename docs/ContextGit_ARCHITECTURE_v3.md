@@ -1,4 +1,4 @@
-# ContextHub — Architecture Document
+# ContextGit — Architecture Document
 
 **Version 3.0 | March 2026**
 **Status: Internal — Co-founder Review**
@@ -28,7 +28,7 @@
 
 ## 1. System Overview
 
-ContextHub is the memory layer for AI agent workflows. It provides persistent, structured, shared context to any agent — regardless of how that agent is invoked.
+ContextGit is the memory layer for AI agent workflows. It provides persistent, structured, shared context to any agent — regardless of how that agent is invoked.
 
 There are four user-facing surfaces:
 
@@ -36,7 +36,7 @@ There are four user-facing surfaces:
 
 **REST API** — For automated pipelines, CI agents, custom frameworks (LangChain, CrewAI). Full feature parity with the MCP server. No MCP required.
 
-**CLI** — For Ralph-style loops, shell scripts, and automation. `contexthub snapshot` generates AGENTS.md. `contexthub commit` checkpoints from the command line. Composable with any bash workflow.
+**CLI** — For Ralph-style loops, shell scripts, and automation. `contextgit snapshot` generates AGENTS.md. `contextgit commit` checkpoints from the command line. Composable with any bash workflow.
 
 **Web Platform** — A GitHub-like frontend where developers browse, search, publish, and clone agent context repositories.
 
@@ -81,7 +81,7 @@ All four surfaces share a single Context Engine and dual-mode Persistence Layer.
 └─────────────────────────────────────────────────────────────────────────┘
             │
 ┌───────────┴────────────────────────────────────────────────────────────┐
-│  ContextHub Web Platform                                               │
+│  ContextGit Web Platform                                               │
 │  Explore repos | Branch viewer | Diff view | Threads | Search          │
 │  Clone | Fork | Star | Team dashboards | Live agent activity           │
 └────────────────────────────────────────────────────────────────────────┘
@@ -134,7 +134,7 @@ New command. Generates a formatted export of the session start contract for use 
 
 | Format | Output | Use case |
 |--------|--------|---------|
-| `agents-md` | Markdown AGENTS.md file | Ralph loops, `contexthub snapshot > AGENTS.md` |
+| `agents-md` | Markdown AGENTS.md file | Ralph loops, `contextgit snapshot > AGENTS.md` |
 | `json` | Structured JSON | CI pipelines, custom integrations |
 | `text` | Plain text | Shell scripts, logging |
 
@@ -233,7 +233,7 @@ What this line of work has done and where it stands.
 For Ralph loops and shell-script workflows, the snapshot can be exported as AGENTS.md:
 
 ```bash
-contexthub snapshot --format=agents-md > AGENTS.md
+contextgit snapshot --format=agents-md > AGENTS.md
 ```
 
 Generates a Ralph-compatible AGENTS.md with the same information structured for the Ralph prompt pattern:
@@ -260,7 +260,7 @@ Upstash client installed. Middleware skeleton in place.
 <operational notes from AGENTS.md commits>
 ```
 
-This is the bridge between ContextHub and Ralph. Ralph loops auto-generate AGENTS.md from accumulated context rather than maintaining it manually. It is never stale.
+This is the bridge between ContextGit and Ralph. Ralph loops auto-generate AGENTS.md from accumulated context rather than maintaining it manually. It is never stale.
 
 ### 4.3 Why the Snapshot Stays Flat at Scale
 
@@ -282,7 +282,7 @@ context_get scope=search query="how we handled token refresh"
 
 ## 5. Workflow Integrations
 
-ContextHub is workflow-agnostic. The same context engine and storage layer serves every major AI agent pattern through the appropriate integration interface.
+ContextGit is workflow-agnostic. The same context engine and storage layer serves every major AI agent pattern through the appropriate integration interface.
 
 ### 5.1 Interactive Sessions (MCP)
 
@@ -306,13 +306,13 @@ Next session
 
 ### 5.2 Ralph / Autonomous Loop (CLI)
 
-Ralph's `while true` loop already solves the execution problem. ContextHub adds the memory layer without changing the loop mechanics.
+Ralph's `while true` loop already solves the execution problem. ContextGit adds the memory layer without changing the loop mechanics.
 
 ```bash
 #!/bin/bash
 while true; do
-  # 1. Generate AGENTS.md from ContextHub snapshot (replaces manual maintenance)
-  contexthub snapshot --format=agents-md > AGENTS.md
+  # 1. Generate AGENTS.md from ContextGit snapshot (replaces manual maintenance)
+  contextgit snapshot --format=agents-md > AGENTS.md
 
   # 2. Run Ralph iteration (reads AGENTS.md + IMPLEMENTATION_PLAN.md as always)
   cat PROMPT.md | claude -p --dangerously-skip-permissions \
@@ -321,7 +321,7 @@ while true; do
     --verbose
 
   # 3. Checkpoint context after iteration completes
-  contexthub commit \
+  contextgit commit \
     --message "Loop iteration: $(git log -1 --pretty=%s)" \
     --workflow-type ralph-loop \
     --loop-iteration $ITERATION
@@ -333,14 +333,14 @@ while true; do
 done
 ```
 
-**What ContextHub adds to Ralph without changing it:**
+**What ContextGit adds to Ralph without changing it:**
 
 - `AGENTS.md` is generated from accumulated context — never manually maintained, never stale
 - Architectural decisions, failed approaches, and conventions discovered in one loop iteration persist across restarts
 - When a second developer runs the same loop on the same project, their `AGENTS.md` reflects everything the first developer's loops discovered
 - Web UI provides visibility into what the loop has been doing — branch tree, commit history, open threads — without reading raw git logs
 
-**What stays unchanged:** `IMPLEMENTATION_PLAN.md` is entirely Ralph's domain. ContextHub does not touch it. Clean separation: Ralph owns task tracking, ContextHub owns institutional memory.
+**What stays unchanged:** `IMPLEMENTATION_PLAN.md` is entirely Ralph's domain. ContextGit does not touch it. Clean separation: Ralph owns task tracking, ContextGit owns institutional memory.
 
 ### 5.3 CI / GitHub Actions (REST API)
 
@@ -356,12 +356,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install ContextHub CLI
-        run: npm install -g contexthub
+      - name: Install ContextGit CLI
+        run: npm install -g contextgit
 
       - name: Pull context snapshot
         run: |
-          contexthub snapshot \
+          contextgit snapshot \
             --project ${{ vars.CONTEXTHUB_PROJECT_ID }} \
             --store ${{ secrets.CONTEXTHUB_REMOTE_URL }} \
             --format agents-md > AGENTS.md
@@ -376,7 +376,7 @@ jobs:
 
       - name: Commit agent findings to context
         run: |
-          contexthub commit \
+          contextgit commit \
             --message "CI review: PR #${{ github.event.number }} findings" \
             --workflow-type ci \
             --ci-run-id ${{ github.run_id }} \
@@ -400,7 +400,7 @@ LangChain, CrewAI, custom pipelines — any Python or Node.js orchestration fram
 ```python
 import requests
 
-CONTEXTHUB_URL = "https://app.contexthub.dev"
+CONTEXTHUB_URL = "https://app.contextgit.dev"
 PROJECT_ID = "uuid"
 API_KEY = os.environ["CONTEXTHUB_API_KEY"]
 headers = {"Authorization": f"Bearer {API_KEY}"}
@@ -466,15 +466,15 @@ Append-only commits mean concurrent writes from multiple agents across multiple 
 feature/payments — 3 agents, 2 workflow types
 
 Ralph loop (overnight):
-  contexthub snapshot > AGENTS.md
+  contextgit snapshot > AGENTS.md
   → loop runs, dev agent implements Stripe integration
-  → contexthub commit role=dev workflow=ralph-loop
+  → contextgit commit role=dev workflow=ralph-loop
     "Stripe webhook endpoint created at /api/webhooks/stripe"
 
 CI pipeline (triggered by push):
   → test agent: context snapshot pulled, aware of dev agent's commit
   → runs tests, finds edge case
-  → contexthub commit role=ci workflow=ci ci-run-id=abc123
+  → contextgit commit role=ci workflow=ci ci-run-id=abc123
     "24 tests passing. Duplicate webhook on network retry."
     threads.open: ["network retry duplicate webhook — needs idempotency fix"]
 
@@ -512,7 +512,7 @@ const branch = await git.revparse(['--abbrev-ref', 'HEAD'])
 
 ### 7.2 Git Hooks
 
-`contexthub init` offers to install three git hooks:
+`contextgit init` offers to install three git hooks:
 
 **post-checkout** — fires when developer switches branches, updates active context branch.
 
@@ -772,10 +772,10 @@ async getFormattedSnapshot(
 **Installation:**
 
 ```bash
-npx contexthub init
+npx contextgit init
 ```
 
-Generates `.contexthub/config.json`:
+Generates `.contextgit/config.json`:
 
 ```json
 {
@@ -794,7 +794,7 @@ Generates `.contexthub/config.json`:
 
 **Background snapshotting:** MCP server counts tool calls and auto-commits every N calls (default 10). Tagged `commit_type: auto`, displayed differently in the web UI, can be promoted to manual.
 
-**System prompt fragment** injected by `contexthub init`:
+**System prompt fragment** injected by `contextgit init`:
 
 ```
 You have access to a persistent context system. Use it consistently.
@@ -817,30 +817,30 @@ The snapshot is NOT the PRD. It is distilled reality. Treat it as ground truth.
 
 ```bash
 # Installation (alongside MCP server, same package)
-npm install -g contexthub
+npm install -g contextgit
 # or without global install
-npx contexthub <command>
+npx contextgit <command>
 
 # Core commands
-contexthub init                          # init project, generate config, install hooks
-contexthub snapshot                      # print snapshot to stdout (text format)
-contexthub snapshot --format agents-md   # print AGENTS.md formatted snapshot
-contexthub snapshot --format json        # print JSON snapshot
-contexthub commit --message "..."        # create a context commit
-contexthub commit --message "..." \
+contextgit init                          # init project, generate config, install hooks
+contextgit snapshot                      # print snapshot to stdout (text format)
+contextgit snapshot --format agents-md   # print AGENTS.md formatted snapshot
+contextgit snapshot --format json        # print JSON snapshot
+contextgit commit --message "..."        # create a context commit
+contextgit commit --message "..." \
   --workflow-type ralph-loop \
   --loop-iteration 42                    # commit with workflow metadata
-contexthub search "query"                # semantic search, prints results
-contexthub branch create <name>          # create context branch
-contexthub branch merge <name>           # merge context branch
-contexthub clone <url>                   # clone public context repository
-contexthub push                          # push local context to remote store
-contexthub pull                          # pull remote context to local store
-contexthub status                        # show current branch, head commit, open threads
+contextgit search "query"                # semantic search, prints results
+contextgit branch create <name>          # create context branch
+contextgit branch merge <name>           # merge context branch
+contextgit clone <url>                   # clone public context repository
+contextgit push                          # push local context to remote store
+contextgit pull                          # pull remote context to local store
+contextgit status                        # show current branch, head commit, open threads
 
 # Remote store flags (override config)
-contexthub snapshot --store <url> --api-key <key>
-contexthub commit --store <url> --api-key <key>
+contextgit snapshot --store <url> --api-key <key>
+contextgit commit --store <url> --api-key <key>
 ```
 
 **Ralph loop integration (canonical pattern):**
@@ -851,7 +851,7 @@ ITERATION=0
 
 while true; do
   # Auto-generate AGENTS.md — never manually maintained
-  contexthub snapshot --format agents-md > AGENTS.md
+  contextgit snapshot --format agents-md > AGENTS.md
 
   # Ralph iteration
   cat PROMPT.md | claude -p \
@@ -861,7 +861,7 @@ while true; do
     --verbose
 
   # Checkpoint context
-  contexthub commit \
+  contextgit commit \
     --message "$(git log -1 --pretty=%s)" \
     --workflow-type ralph-loop \
     --loop-iteration $ITERATION
@@ -1026,7 +1026,7 @@ Agent         1──* Commit
 
 ## 13. Authentication and Multi-tenancy
 
-**Phase 1 (local):** No auth. LocalStore at `~/.contexthub/`.
+**Phase 1 (local):** No auth. LocalStore at `~/.contextgit/`.
 
 **Phase 2 (remote):** Email + password via Supabase Auth. GitHub OAuth. API keys for programmatic access (MCP server, CLI, REST). API keys scoped by role — read-only keys for CI agents, read-write for dev agents.
 
@@ -1042,8 +1042,8 @@ Agent         1──* Commit
 
 ```
 Developer machine:
-  npx contexthub  (MCP server + CLI, ~50MB with SQLite bundled)
-  └── ~/.contexthub/projects/<project-id>.db
+  npx contextgit  (MCP server + CLI, ~50MB with SQLite bundled)
+  └── ~/.contextgit/projects/<project-id>.db
 ```
 
 No cloud. No accounts. Single npm package.
@@ -1093,7 +1093,7 @@ Supabase free tier covers all development and early beta. Upgrade to Supabase Pr
 
 **Phase 1 gate (all three must pass):**
 - Does `context_get scope=global` return a snapshot that orients an agent without reading any other documentation?
-- Does `contexthub snapshot --format agents-md` generate a useful AGENTS.md in a real Ralph loop?
+- Does `contextgit snapshot --format agents-md` generate a useful AGENTS.md in a real Ralph loop?
 - Does the REST API snapshot endpoint work correctly for a simulated CI pipeline call?
 
 ### Phase 2 — Weeks 5–8: Team, Multi-Agent, CI

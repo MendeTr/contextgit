@@ -1,5 +1,5 @@
 {
-  "name": "contexthub",
+  "name": "contextgit",
   "private": true,
   "version": "0.0.1",
   "engines": {
@@ -7,7 +7,7 @@
     "pnpm": ">=9.0.0"
   },
   "bin": {
-    "contexthub": "./packages/cli/bin/run.js"
+    "contextgit": "./packages/cli/bin/run.js"
   },
   "scripts": {
     "build": "pnpm -r build",

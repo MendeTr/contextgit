@@ -4,7 +4,7 @@
 //   context('global') → snapshot shows thread + both commits.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { ContextEngine } from '@contexthub/core'
+import { ContextEngine } from '@contextgit/core'
 import { LocalStore } from './local/index.js'
 
 describe('ContextEngine + LocalStore integration', () => {
@@ -22,7 +22,7 @@ describe('ContextEngine + LocalStore integration', () => {
 
   it('Week 1 validation: project → 2 commits → context("global") shows thread + both commits', async () => {
     // Setup: project + branch
-    const project = await store.createProject({ name: 'contexthub', description: 'Persistent memory layer' })
+    const project = await store.createProject({ name: 'contextgit', description: 'Persistent memory layer' })
     const branch  = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
 
     await engine.init(project.id, branch.id)

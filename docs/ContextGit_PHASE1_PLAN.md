@@ -1,7 +1,7 @@
-# ContextHub — Phase 1 Implementation Plan
+# ContextGit — Phase 1 Implementation Plan
 
 ## Context
-ContextHub is a persistent memory layer for AI agent workflows, solving the "amnesia problem" where agents lose context across sessions. The repo is greenfield (only `Docs/` exists). We're planning Phase 1 (Weeks 1–4): the core engine, LocalStore, MCP server, CLI, and REST API.
+ContextGit is a persistent memory layer for AI agent workflows, solving the "amnesia problem" where agents lose context across sessions. The repo is greenfield (only `Docs/` exists). We're planning Phase 1 (Weeks 1–4): the core engine, LocalStore, MCP server, CLI, and REST API.
 
 **Key decisions:**
 - Build from scratch (GCC/Aline = inspiration for COMMIT/BRANCH/MERGE/CONTEXT/SNAPSHOT concepts only)
@@ -14,10 +14,10 @@ ContextHub is a persistent memory layer for AI agent workflows, solving the "amn
 ## Monorepo Structure
 
 ```
-contexthub/
+contextgit/
 ├── package.json              ← pnpm workspaces root
 ├── tsconfig.base.json
-├── .contexthub/config.json   ← bootstrapped on itself during dev
+├── .contextgit/config.json   ← bootstrapped on itself during dev
 ├── packages/
 │   ├── core/                 ← Context Engine (pure business logic, no I/O)
 │   │   └── src/
@@ -82,7 +82,7 @@ type ContextScope = 'global' | 'branch' | 'search' | 'commit' | 'raw'
 **Goal:** Monorepo scaffolded, COMMIT + CONTEXT returning real data from SQLite.
 
 1. **Days 1–2:** Scaffold monorepo (pnpm workspaces). Write `types.ts` in full. Write `store/interface.ts` in full. Set up Vitest.
-2. **Days 3–4:** `LocalStore` — DDL (`schema.ts`), migration runner, `better-sqlite3` implementation. Use sync API wrapped in `Promise.resolve()` at the interface boundary (fine for LocalStore; `ContextStore` interface already returns Promises so Phase 2 `RemoteStore` swap is clean — keep that discipline). IDs via `nanoid()`. DB path: `~/.contexthub/projects/<projectId>.db`.
+2. **Days 3–4:** `LocalStore` — DDL (`schema.ts`), migration runner, `better-sqlite3` implementation. Use sync API wrapped in `Promise.resolve()` at the interface boundary (fine for LocalStore; `ContextStore` interface already returns Promises so Phase 2 `RemoteStore` swap is clean — keep that discipline). IDs via `nanoid()`. DB path: `~/.contextgit/projects/<projectId>.db`.
 3. **Days 5–7:** `ContextEngine.commit()` (with placeholder string truncation for summary), `ContextEngine.context('global')`, `SnapshotFormatter` (all 3 formats), `ThreadManager`.
 
 **Week 1 validation:** Create project → 2 commits (one with open thread) → `context('global')` → snapshot output shows thread + both commits.
@@ -105,23 +105,23 @@ type ContextScope = 'global' | 'branch' | 'search' | 'commit' | 'raw'
 ---
 
 ### Week 3 — MCP Server, CLI, Git Hooks (Days 15–21)
-**Goal:** All integration surfaces connected. Begin dogfooding on the ContextHub repo itself.
+**Goal:** All integration surfaces connected. Begin dogfooding on the ContextGit repo itself.
 
-1. **Days 15–16:** MCP Server — 4 tools: `context_get`, `context_commit`, `context_branch`, `context_merge`. Loads `.contexthub/config.json`, detects current git branch via `simple-git`, auto-resolves context branch.
-2. **Day 17:** `GitSync` — `detectCurrentBranch()`, `ensureContextBranchExists()`, `installGitHooks()`. Hooks: `post-checkout` → `contexthub branch switch`, `post-merge` → `contexthub merge --auto`. Non-destructive: append to existing hooks.
+1. **Days 15–16:** MCP Server — 4 tools: `context_get`, `context_commit`, `context_branch`, `context_merge`. Loads `.contextgit/config.json`, detects current git branch via `simple-git`, auto-resolves context branch.
+2. **Day 17:** `GitSync` — `detectCurrentBranch()`, `ensureContextBranchExists()`, `installGitHooks()`. Hooks: `post-checkout` → `contextgit branch switch`, `post-merge` → `contextgit merge --auto`. Non-destructive: append to existing hooks.
 3. **Days 18–19:** oclif CLI — `init`, `snapshot`, `commit`, `branch create/merge`, `search`, `status`. Single `bin/run.js` entry point: detects CLI command vs MCP stdio mode.
 
-   **`contexthub init` must also output a system prompt fragment** — the instruction that tells the agent to call `context_get scope=global` at every session start and `context_commit` at milestones. Without this, Gate 1 fails because the agent won't call the tools reliably. Print it to stdout and write it to `.contexthub/system-prompt.md` for inclusion in MCP config. Minimal viable fragment:
+   **`contextgit init` must also output a system prompt fragment** — the instruction that tells the agent to call `context_get scope=global` at every session start and `context_commit` at milestones. Without this, Gate 1 fails because the agent won't call the tools reliably. Print it to stdout and write it to `.contextgit/system-prompt.md` for inclusion in MCP config. Minimal viable fragment:
    ```
-   You have access to ContextHub memory tools. At the start of every session, call
+   You have access to ContextGit memory tools. At the start of every session, call
    context_get with scope=global to load project state. After completing significant
    work, call context_commit with a message describing what was done and any open
    threads. Use context_branch before exploring risky changes.
    ```
-4. **Days 20–21:** `AutoSnapshotManager` — fires auto-commit every N=10 non-context tool calls. **Start dogfooding:** run `contexthub init` on this repo, configure Claude Code MCP.
+4. **Days 20–21:** `AutoSnapshotManager` — fires auto-commit every N=10 non-context tool calls. **Start dogfooding:** run `contextgit init` on this repo, configure Claude Code MCP.
 
 **Week 3 validation:**
-- `npx contexthub init` → config + DB created, hooks installed
+- `npx contextgit init` → config + DB created, hooks installed
 - `context_get scope=global` works inside Claude Code
 - Git branch switch fires hook, active context branch updates
 
@@ -132,7 +132,7 @@ type ContextScope = 'global' | 'branch' | 'search' | 'commit' | 'raw'
 
 1. **Days 22–23:** Express REST API — routes: `POST /v1/projects/:id/commits`, `GET /v1/projects/:id/snapshot`, `POST /v1/projects/:id/branches`, `POST /v1/projects/:id/branches/:id/merge`, `POST /v1/projects/:id/search`, `GET /v1/projects/:id/threads`. Thin wrappers over `ContextEngine`. Supertest integration tests.
 2. **Days 24–25:** `EmbeddingService` — `@xenova/transformers` `Xenova/all-MiniLM-L6-v2`, 384 dims, singleton with lazy init (pre-warm on MCP startup). Wire into `engine.commit()`. `semanticSearch` via sqlite-vec KNN query. FTS5 full-text search via migration v2.
-3. **Day 26:** npx packaging — `contexthub` package.json `bin` entry, `scripts/build.sh`, test `npx contexthub init` in a clean temp dir.
+3. **Day 26:** npx packaging — `contextgit` package.json `bin` entry, `scripts/build.sh`, test `npx contextgit init` in a clean temp dir.
 4. **Days 27–28:** Run all three end-to-end validation gates (see below).
 
 **Version constraints:**
@@ -169,8 +169,8 @@ type ContextScope = 'global' | 'branch' | 'search' | 'commit' | 'raw'
 
 ## Config Strategy
 
-- `.contexthub/config.json` — project-local, committed to repo (shared across team)
-- `~/.contexthub/projects/<projectId>.db` — machine-local, not committed
+- `.contextgit/config.json` — project-local, committed to repo (shared across team)
+- `~/.contextgit/projects/<projectId>.db` — machine-local, not committed
 - `ANTHROPIC_API_KEY` from env or config
 
 ## Agent Identity (Phase 1)
