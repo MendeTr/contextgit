@@ -18,6 +18,15 @@ Call context_get with scope=global immediately.
 Do not read decisions.md. Do not ask questions first.
 Read the snapshot. Then start working.
 
+## After EVERY completed task
+git add .
+git commit -m "feat/fix: <what was done>"
+git push
+context_commit "what was built | key decisions | next task"
+
+Do not wait to be asked. Every completed task = immediate commit.
+This applies to bug fixes, feature additions, and refactors alike.
+
 ## Session End (do this every time)
 Call context_commit with:
 - what was built
@@ -25,7 +34,6 @@ Call context_commit with:
 - open threads
 - the first concrete task for the next session
 Then: git add . && git commit -m "..." && git push
-
 ```
 
 Then commit everything:
