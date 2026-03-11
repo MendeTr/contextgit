@@ -18,6 +18,7 @@ Call context_get with scope=global immediately.
 Do not read decisions.md. Do not ask questions first.
 Read the snapshot. Then start working.
 Do not ask what to work on. Start the highest priority item from the snapshot.
+If unclear, follow the Phase 2 plan: docs/ContextGit_PHASE2_PLAN.md
 
 
 ## After EVERY completed task
