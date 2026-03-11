@@ -8,12 +8,14 @@ import type { Express } from 'express'
 import { bootstrap } from './bootstrap.js'
 import { createRouter } from './router.js'
 import { createStoreRouter } from './store-router.js'
+import { createAuthMiddleware } from './middleware/auth.js'
 
 export async function createApp(): Promise<Express> {
   const ctx = await bootstrap()
 
   const app = express()
   app.use(express.json())
+  app.use(createAuthMiddleware(process.env['CONTEXTGIT_API_KEY']))
 
   app.use('/v1/store', createStoreRouter(ctx.store))
   app.use('/', createRouter(ctx))
