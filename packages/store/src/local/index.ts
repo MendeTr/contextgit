@@ -96,7 +96,13 @@ export class LocalStore implements ContextStore {
 
   createBranch(branch: BranchInput): Promise<Branch> {
     try {
-      return Promise.resolve(this.q.insertBranch({ id: nanoid(), ...branch }))
+      const id = branch.id ?? nanoid()
+      // Idempotent: if caller supplied an ID and it already exists, return existing
+      if (branch.id) {
+        const existing = this.q.getBranch(branch.id)
+        if (existing) return Promise.resolve(existing)
+      }
+      return Promise.resolve(this.q.insertBranch({ ...branch, id }))
     } catch (e) {
       return Promise.reject(e)
     }
@@ -185,11 +191,17 @@ export class LocalStore implements ContextStore {
 
   createCommit(input: CommitInput): Promise<Commit> {
     try {
+      // Idempotent: if caller supplied an ID and it already exists, return existing
+      if (input.id) {
+        const existing = this.q.getCommit(input.id)
+        if (existing) return Promise.resolve(existing)
+      }
+
       const result = this.db.transaction((): Commit => {
         const branch = this.q.getBranch(input.branchId)
         if (!branch) throw new Error(`Branch not found: ${input.branchId}`)
 
-        const commitId = nanoid()
+        const commitId = input.id ?? nanoid()
         const parentId = input.parentId ?? branch.headCommitId ?? null
 
         const commit = this.q.insertCommit(commitId, input, parentId)
