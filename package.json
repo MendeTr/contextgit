@@ -6,6 +6,9 @@
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
+  "bin": {
+    "contexthub": "./packages/cli/bin/run.js"
+  },
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run --config vitest.config.ts",

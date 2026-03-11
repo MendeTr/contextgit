@@ -19,7 +19,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
 import { ContextEngine, EmbeddingService } from '@contexthub/core'
-import { LocalStore } from '@contexthub/store'
+import { LocalStore, RemoteStore } from '@contexthub/store'
 import { loadConfig } from './config.js'
 import { AutoSnapshotManager } from './auto-snapshot.js'
 import type { ContextStore } from '@contexthub/store'
@@ -69,7 +69,10 @@ async function bootstrap(): Promise<ServerContext> {
   const config = loadConfig()
   const { projectId } = config
 
-  const store = new LocalStore(projectId)
+  const store: ContextStore =
+    config.store && config.store !== 'local'
+      ? new RemoteStore(config.store)
+      : new LocalStore(projectId)
 
   const gitBranch = await detectGitBranch()
   const branchId = await resolveContextBranch(store, projectId, gitBranch)

@@ -306,3 +306,34 @@
 
 **Next:**
 - Day 24 (Week 4): wire `RemoteStore` into CLI/MCP bootstrap — check `config.store !== 'local'`, create `RemoteStore(config.store)` instead of `LocalStore`. Then run Phase 1 validation gates: Gate 2 (ralph-loop CLI), Gate 3 (REST API curl). Update npx packaging (`contexthub` bin entry in root package.json, `scripts/build.sh`).
+
+---
+
+## Session: Day 24 — RemoteStore wiring + npx packaging + Phase 1 gates (2026-03-11) #11
+
+**Built:**
+- `packages/cli/src/bootstrap.ts` — checks `config.store !== 'local'`; creates `RemoteStore(config.store)` when a URL is configured, `LocalStore(projectId)` otherwise.
+- `packages/mcp/src/server.ts` — same RemoteStore/LocalStore switch in `bootstrap()`.
+- `scripts/build.sh` — builds all 5 packages in dependency order via `pnpm --filter`. Executable.
+- Root `package.json` — added `"bin": { "contexthub": "./packages/cli/bin/run.js" }` so `npx contexthub` works from the monorepo root.
+- **Gate 2 PASS (ralph-loop CLI):** 3 iterations of `contexthub context -f agents-md` → `contexthub commit`. All 4 sections present in agents-md output every iteration: `## Project State`, `## Current Branch`, `## Recent Activity`, `## Open Threads`.
+- **Gate 3 PASS (REST API):** `GET /snapshot?format=agents-md` returns `## Project State` section; `POST /commits` returns `{ id, message, createdAt }` with 201.
+- All 32 tests pass; `pnpm build` and `pnpm typecheck` clean.
+
+**Decided:**
+- **`config.store && config.store !== 'local'` guard** — catches both missing field (old configs pre-dating the field) and the explicit `'local'` value. Any other non-empty string is treated as a URL for `RemoteStore`.
+- **Root `package.json` bin entry** — points to `./packages/cli/bin/run.js` (the oclif ESM entry point). The monorepo root is named `contexthub` so `npx contexthub` routes here. No separate publish step needed for local dev; `pnpm link` or `npm link` will expose the bin globally.
+- **`scripts/build.sh` uses `pnpm --filter`** — explicit per-package ordering guarantees `core` before `store` before the rest. Safer than `pnpm -r build` which may parallelize incorrectly on first install.
+- **Gate 3 uses flat routes** (`/commits`, `/snapshot`) not `/v1/projects/:id/...` — the API is single-project-per-process (resolved at startup). The plan doc showed the multi-project URL schema planned for a future phase; the flat routes are the correct target for Phase 1 Gate 3.
+
+**Unresolved:**
+- `server.tool()` 4-arg form in MCP SDK still deprecated (carried from Day 10).
+- `loadConfig()` called twice in MCP `createServer()` — minor, deferred.
+- npx packaging not tested in a clean temp dir (no `pnpm link` validation run yet).
+- Gate 1 (interactive MCP session cold-start) not formally re-run — MCP tools are live in Claude Code (confirmed Day 22) but cold-start AGENTS.md read not re-validated after RemoteStore wiring.
+
+**Next:**
+- Days 25–26: npx clean-install validation — `cd /tmp && npx contexthub init` in a fresh dir. Fix any path/shebang issues. Then run Gate 1 formal cold-start: Claude Code session start → `context_get scope=global` auto-called via system prompt → snapshot returned with no prior context loaded.
+**Tokens:** TBD
+**Ramp-up:** 0
+**Time to first code:** ~3 min

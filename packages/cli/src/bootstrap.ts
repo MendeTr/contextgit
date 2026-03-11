@@ -4,7 +4,7 @@
 import os from 'os'
 import { simpleGit } from 'simple-git'
 import { ContextEngine } from '@contexthub/core'
-import { LocalStore } from '@contexthub/store'
+import { LocalStore, RemoteStore } from '@contexthub/store'
 import type { ContextStore } from '@contexthub/store'
 import { loadConfig } from './config.js'
 
@@ -45,7 +45,10 @@ export async function bootstrap(): Promise<CliContext> {
   const config = loadConfig()
   const { projectId } = config
 
-  const store = new LocalStore(projectId)
+  const store: ContextStore =
+    config.store && config.store !== 'local'
+      ? new RemoteStore(config.store)
+      : new LocalStore(projectId)
   const gitBranch = await detectGitBranch()
   const branchId = await resolveContextBranch(store, projectId, gitBranch)
 
