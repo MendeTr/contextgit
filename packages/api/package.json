@@ -1,19 +1,20 @@
 {
   "name": "@contextgit/api",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "type": "module",
   "main": "./dist/server.js",
   "exports": {
     ".": "./dist/server.js",
     "./bin": "./dist/index.js"
   },
+  "files": ["dist"],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "workspace:*",
-    "@contextgit/store": "workspace:*",
+    "@contextgit/core": "0.0.3",
+    "@contextgit/store": "0.0.3",
     "express": "^4.19.0",
     "simple-git": "^3.27.0"
   },
