@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
 
 interface MigrationRow {
   version: number
@@ -61,6 +61,15 @@ const MIGRATIONS: Migration[] = [
         db.exec(`INSERT INTO commits_fts(commits_fts) VALUES('rebuild')`)
       } catch {
         // FTS5 table not available — skip rebuild
+      }
+    },
+  },
+  {
+    version: 4,
+    name: 'claims_table',
+    run(db) {
+      for (const sql of SCHEMA_V4_DDL) {
+        db.exec(sql)
       }
     },
   },

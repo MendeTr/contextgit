@@ -134,3 +134,24 @@ export const SCHEMA_V2_DDL = [
 export const SCHEMA_V3_DDL = [
   CREATE_FTS_TRIGGER,
 ]
+
+// Migration v4 adds the claims table for coordination primitives (claim/unclaim)
+export const CREATE_CLAIMS = `
+CREATE TABLE IF NOT EXISTS claims (
+  id           TEXT PRIMARY KEY,
+  project_id   TEXT NOT NULL REFERENCES projects(id),
+  branch_id    TEXT NOT NULL REFERENCES branches(id),
+  task         TEXT NOT NULL,
+  agent_id     TEXT NOT NULL,
+  role         TEXT NOT NULL,
+  claimed_at   INTEGER NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'proposed',
+  ttl          INTEGER NOT NULL,
+  released_at  INTEGER
+)
+`
+
+export const SCHEMA_V4_DDL = [
+  CREATE_CLAIMS,
+  `CREATE INDEX IF NOT EXISTS idx_claims_project ON claims(project_id, status)`,
+]

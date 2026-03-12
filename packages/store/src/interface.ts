@@ -4,6 +4,8 @@ import type {
   AgentRole,
   Branch,
   BranchInput,
+  Claim,
+  ClaimInput,
   Commit,
   CommitInput,
   Pagination,
@@ -52,4 +54,9 @@ export interface ContextStore {
   // Agents
   upsertAgent(agent: AgentInput): Promise<Agent>
   listAgents(projectId: string): Promise<Agent[]>
+
+  // Claims
+  claimTask(projectId: string, branchId: string, input: ClaimInput): Promise<Claim>
+  unclaimTask(claimId: string): Promise<void>
+  listActiveClaims(projectId: string): Promise<Claim[]>
 }

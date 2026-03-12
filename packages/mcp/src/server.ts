@@ -283,6 +283,67 @@ export async function createServer(): Promise<McpServer> {
     },
   )
 
+  // ── context_claim ────────────────────────────────────────────────────────────
+  server.tool(
+    'context_claim',
+    'Claim a task to prevent other agents from picking it up simultaneously. Call this before starting any significant task.',
+    {
+      task: z.string().min(1).describe('Short description of the task being claimed (e.g. "build auth module").'),
+      ttl_hours: z.number().positive().default(2).describe('Time-to-live in hours before the claim auto-expires. Default: 2.'),
+      status: z.enum(['proposed', 'active']).default('proposed').describe("'proposed' for plan-mode claims; 'active' once approved and work begins."),
+    },
+    async ({ task, ttl_hours, status }) => {
+      await autoSnapshot.onToolCall('context_claim')
+      try {
+        const claim = await ctx.store.claimTask(ctx.projectId, ctx.branchId, {
+          task,
+          agentId: `${os.hostname()}-mcp-claude-code-interactive`,
+          role: ctx.config.agentRole ?? 'solo',
+          status,
+          ttl: Math.round(ttl_hours * 3_600_000),
+        })
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Claim recorded.\nID:     ${claim.id}\nTask:   ${claim.task}\nStatus: ${claim.status}\nTTL:    ${ttl_hours}h`,
+            },
+          ],
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return {
+          content: [{ type: 'text', text: `Error creating claim: ${message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  // ── context_unclaim ──────────────────────────────────────────────────────────
+  server.tool(
+    'context_unclaim',
+    'Release a previously claimed task. Use when abandoning a task without committing.',
+    {
+      claim_id: z.string().min(1).describe('ID of the claim to release.'),
+    },
+    async ({ claim_id }) => {
+      await autoSnapshot.onToolCall('context_unclaim')
+      try {
+        await ctx.store.unclaimTask(claim_id)
+        return {
+          content: [{ type: 'text', text: `Claim released.\nID: ${claim_id}` }],
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return {
+          content: [{ type: 'text', text: `Error releasing claim: ${message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
   // ── context_merge ────────────────────────────────────────────────────────────
   server.tool(
     'context_merge',

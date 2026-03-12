@@ -1,0 +1,65 @@
+# CLAUDE.md — ContextGit Agent Instructions
+
+## Session Start (do this every time)
+Call context_get with scope=global immediately.
+Do not read decisions.md. Do not ask questions first.
+Read the snapshot. Then start working.
+Do not ask what to work on. Start the highest priority item from the snapshot.
+If unclear, follow the phase plan: docs/ContextGit_PHASE2_PLAN.md
+If phase plan is complete, check docs/ContextGit_DELTA.md for open deltas.
+
+## After EVERY completed task
+git add .
+git commit -m "feat/fix: <what was done>"
+git push
+context_commit "what was built | key decisions | next task"
+
+Do not wait to be asked. Every completed task = immediate commit.
+This applies to bug fixes, feature additions, and refactors alike.
+
+## When scope changes mid-session
+1. Write a context_commit with replan: prefix immediately:
+   `context_commit "replan: <what changed and why. what is new scope. what is no longer in scope>"`
+2. Then build the new scope
+3. Write a normal context_commit when done
+
+Do not build first and replan after. Replan commit must come first.
+Other agents are reading the snapshot in real time.
+
+## When starting a task
+Before building anything, call:
+contextgit claim "<task name>"
+
+This prevents other agents from picking up the same task simultaneously.
+Claims auto-release on your next commit. You do not need to manually unclaim.
+If you abandon a task without committing, call: contextgit unclaim "<task name>"
+
+## Claim lifecycle
+proposed → active → released
+
+In plan mode: claim is written as proposed.
+On user approval: claim flips to active.
+On commit: claim is auto-released.
+On crash or abandon: claim expires after 2 hours (TTL).
+
+## Session End (do this every time)
+Call context_commit with:
+- what was built
+- key decisions and why
+- open threads
+- the first concrete task for the next session
+
+Then: git add . && git commit -m "..." && git push
+
+## Commit message conventions
+feat:   new functionality
+fix:    bug fix
+chore:  config, tooling, deps
+docs:   documentation only
+test:   tests only
+replan: scope change (use contextgit replan, not just a commit message)
+
+## Key files
+docs/ContextGit_PHASE2_PLAN.md   — current phase plan and status
+docs/ContextGit_DELTA.md         — scope changes discovered during development
+docs/IDEAS.md                    — future vision, do not build yet

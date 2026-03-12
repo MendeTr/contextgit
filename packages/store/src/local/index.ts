@@ -20,6 +20,8 @@ import type {
   AgentInput,
   Branch,
   BranchInput,
+  Claim,
+  ClaimInput,
   Commit,
   CommitInput,
   Pagination,
@@ -232,6 +234,9 @@ export class LocalStore implements ContextStore {
         // Update agent stats
         this.q.incrementAgentCommits(input.agentId)
 
+        // Auto-release this agent's claims on this branch (branch-scoped)
+        this.q.releaseClaimsByAgent(input.agentId, input.branchId)
+
         return commit
       })()
 
@@ -334,6 +339,33 @@ export class LocalStore implements ContextStore {
   listAgents(projectId: string): Promise<Agent[]> {
     try {
       return Promise.resolve(this.q.listAgents(projectId))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  // ─── Claims ───────────────────────────────────────────────────────────────
+
+  claimTask(projectId: string, branchId: string, input: ClaimInput): Promise<Claim> {
+    try {
+      return Promise.resolve(this.q.insertClaim(nanoid(), projectId, branchId, input))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  unclaimTask(claimId: string): Promise<void> {
+    try {
+      this.q.updateClaimStatus(claimId, 'released', Date.now())
+      return Promise.resolve()
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  listActiveClaims(projectId: string): Promise<Claim[]> {
+    try {
+      return Promise.resolve(this.q.listActiveClaims(projectId))
     } catch (e) {
       return Promise.reject(e)
     }

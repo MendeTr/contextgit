@@ -434,6 +434,60 @@ New test files:
 | **3 — Auth** | API with `CONTEXTGIT_AUTH=1`: no unauthenticated request succeeds |
 | **4 — CI** | GH Actions workflow writes `agentRole: ci` commit; `contextgit search "CI run"` finds it |
 | **5 — Multi-agent** | `context_get agent_role=dev` returns only dev-role `recentCommits` |
+| **6 — Claims** | `contextgit claim "task"` → `context_get` shows activeClaims → `contextgit commit` auto-releases claim |
+
+---
+
+## Phase 2 Delta — Coordination Primitives (added 2026-03-12)
+
+**Status: IN PROGRESS — Phase 2 is NOT complete until this ships.**
+
+Pre-launch dogfooding revealed task collision: two agents call `context_get`, both see the same next task, both start building it. Fix: `claims` table + claim/unclaim primitives.
+
+See `docs/ContextGit_DELTA.md` for full decision log.
+
+### New: `claims` table (DB migration v4)
+
+```sql
+CREATE TABLE claims (
+  id           TEXT PRIMARY KEY,
+  project_id   TEXT NOT NULL REFERENCES projects(id),
+  branch_id    TEXT NOT NULL REFERENCES branches(id),
+  task         TEXT NOT NULL,
+  agent_id     TEXT NOT NULL,
+  role         TEXT NOT NULL,
+  claimed_at   INTEGER NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'proposed',
+  ttl          INTEGER NOT NULL,
+  released_at  INTEGER
+)
+```
+
+### New types in `packages/core/src/types.ts`
+- `ClaimStatus = 'proposed' | 'active' | 'released'`
+- `Claim` entity
+- `ClaimInput`
+- `SessionSnapshot.activeClaims: Claim[]`
+
+### New store methods in `packages/store/src/interface.ts`
+- `claimTask(projectId, branchId, input): Promise<Claim>`
+- `unclaimTask(claimId): Promise<void>`
+- `listActiveClaims(projectId): Promise<Claim[]>`
+
+Auto-release on `createCommit()` — branch-scoped: only releases this agent's claims on this branch.
+
+TTL filter is in SQL (`claimed_at + ttl > now`) — not application code.
+
+### New MCP tools
+- `context_claim` — input: `task`, `ttl_hours` (default 2). Returns claim ID.
+- `context_unclaim` — input: `claim_id`. Releases immediately.
+
+### New CLI commands
+- `contextgit claim "<task>"` — creates proposed claim
+- `contextgit unclaim <claimId>` — releases claim manually
+
+### Snapshot change
+`context_get` output gains `## Active Claims` section showing all non-released, non-TTL-expired claims.
 
 ---
 
