@@ -18,38 +18,41 @@ This affects solo devs too. Two Claude Code windows on the same project hit the 
 **Second problem discovered:**
 Phase 2 was marked complete in the snapshot. New scope was identified (claim primitive). Agent loading the snapshot would see "Phase 2 complete" and not know about the delta. No mechanism existed to propagate scope changes to other agents.
 
-**New primitives added:**
+**Decision — replan as a primitive: REJECTED**
+
+Initially proposed `contextgit replan <reason>` as a new command. Rejected because a regular `context_commit` with a `replan:` prefix achieves the same result:
+
+```bash
+context_commit "replan: claim primitive added to Phase 2. Task collision discovered during testing. Phase 2 not complete."
+```
+
+The `replan:` prefix in the message gives the semantic signal. The ledger entry updates the snapshot. No new command needed. Keep it simple.
+
+**CLAUDE.md instruction added instead:**
+```markdown
+## When scope changes mid-session
+Write a context_commit with replan: prefix before building new scope:
+context_commit "replan: <what changed and why>"
+This updates the snapshot so other agents see the scope change immediately.
+```
+
+**New primitives — APPROVED:**
 
 ### `contextgit claim <task>`
 - Writes `{ task, agent, role, claimedAt, ttl: 2h, status: proposed|active }` to DB
 - `context_get` now includes `activeClaims` in snapshot
 - Other agents see claimed tasks and skip them
 - Claim lifecycle: `proposed → active → released`
-- Plan mode agents write `proposed` claims; approval flips to `active`
+- Plan mode agents write `proposed` claims; user approval flips to `active`
 - TTL: 2 hours — expired claims auto-drop on next `context_get` call
 
 ### `contextgit unclaim <task>`
 - Manual release of a claim
 - Auto-release also fires on next `contextgit commit`
 
-### `contextgit replan <reason>`
-- Special commit type that flags a scope change event
-- Updates the snapshot so next `context_get` reflects new reality
-- Surfaces as distinct event type in snapshot (not mixed with feat/fix commits)
-- Agents in plan mode should call `replan` before building new scope
-
-**CLAUDE.md update required:**
-```markdown
-## When scope changes mid-session
-If you identify missing primitives, new requirements, or plan gaps:
-1. Call `contextgit replan "<what changed and why>"` before building
-2. Then proceed with the new scope
-Do not just start building. Replan first so other agents see the scope change.
-```
-
 **DB changes:**
 - New `claims` table: `{ id, projectId, branchId, task, agentId, role, claimedAt, status, ttl, releasedAt }`
-- New commit type: `replan` (alongside existing `feat`, `fix`, `decision`, `chore`)
+- No new commit types needed — use `replan:` prefix in message instead
 
 **Why not in original PRD:**
 Discovered during dogfooding Phase 2 on the contextgit project itself. Classic "you don't know what you need until you use it" problem. The PRD describes the vision — this doc describes reality.
