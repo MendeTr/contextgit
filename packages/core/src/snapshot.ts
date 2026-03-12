@@ -5,7 +5,7 @@ import type { SessionSnapshot, SnapshotFormat } from './types.js'
 
 export class SnapshotFormatter {
   format(snapshot: SessionSnapshot, fmt: SnapshotFormat): string {
-    const { projectSummary, branchName, branchSummary, recentCommits, openThreads } = snapshot
+    const { projectSummary, branchName, branchSummary, recentCommits, openThreads, activeClaims } = snapshot
 
     if (fmt === 'json') {
       return JSON.stringify(snapshot, null, 2)
@@ -24,6 +24,9 @@ export class SnapshotFormatter {
             `- [ ] ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
         )
         .join('\n')
+      const claims = activeClaims
+        .map((cl) => `- [${cl.status}] ${cl.task}  by ${cl.agentId} (${cl.role})`)
+        .join('\n')
       return [
         `## Project State`,
         projectSummary || '(no summary yet)',
@@ -36,6 +39,9 @@ export class SnapshotFormatter {
         ``,
         `## Open Threads`,
         threads || '(none)',
+        ``,
+        `## Active Claims`,
+        claims || '(none)',
       ].join('\n')
     }
 
@@ -52,6 +58,9 @@ export class SnapshotFormatter {
           `[ ] ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
       )
       .join('\n')
+    const claims = activeClaims
+      .map((cl) => `[${cl.status}] ${cl.task}  by ${cl.agentId} (${cl.role})`)
+      .join('\n')
 
     return [
       `=== PROJECT STATE ===`,
@@ -65,6 +74,9 @@ export class SnapshotFormatter {
       ``,
       `=== OPEN THREADS ===`,
       threads || '(none)',
+      ``,
+      `=== ACTIVE CLAIMS ===`,
+      claims || '(none)',
     ].join('\n')
   }
 }

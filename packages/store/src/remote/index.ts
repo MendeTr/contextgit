@@ -9,6 +9,8 @@ import type {
   AgentInput,
   Branch,
   BranchInput,
+  Claim,
+  ClaimInput,
   Commit,
   CommitInput,
   Pagination,
@@ -47,6 +49,14 @@ function parseCommit(raw: Raw): Commit {
 
 function parseThread(raw: Raw): Thread {
   return { ...(raw as unknown as Thread), createdAt: d(raw['createdAt']) }
+}
+
+function parseClaim(raw: Raw): Claim {
+  return {
+    ...(raw as unknown as Claim),
+    claimedAt: d(raw['claimedAt']),
+    releasedAt: raw['releasedAt'] ? d(raw['releasedAt']) : undefined,
+  }
 }
 
 function parseAgent(raw: Raw): Agent {
@@ -188,6 +198,7 @@ export class RemoteStore implements ContextStore {
       branchSummary: string
       recentCommits: Raw[]
       openThreads: Raw[]
+      activeClaims?: Raw[]
     }>('GET', `/projects/${projectId}/session-snapshot?${qs}`)
     return {
       projectSummary: raw.projectSummary,
@@ -195,6 +206,7 @@ export class RemoteStore implements ContextStore {
       branchSummary: raw.branchSummary,
       recentCommits: raw.recentCommits.map(parseCommit),
       openThreads: raw.openThreads.map(parseThread),
+      activeClaims: (raw.activeClaims ?? []).map(parseClaim),
     }
   }
 
@@ -256,6 +268,22 @@ export class RemoteStore implements ContextStore {
       score: r['score'] as number,
       matchType: r['matchType'] as 'semantic' | 'fulltext',
     }))
+  }
+
+  // ── Claims ───────────────────────────────────────────────────────────────────
+
+  async claimTask(projectId: string, branchId: string, input: ClaimInput): Promise<Claim> {
+    const raw = await this.req<Raw>('POST', `/projects/${projectId}/claims`, { branchId, ...input })
+    return parseClaim(raw)
+  }
+
+  async unclaimTask(claimId: string): Promise<void> {
+    await this.req('DELETE', `/claims/${claimId}`)
+  }
+
+  async listActiveClaims(projectId: string): Promise<Claim[]> {
+    const raw = await this.req<Raw[]>('GET', `/projects/${projectId}/claims`)
+    return raw.map(parseClaim)
   }
 
   // ── Agents ───────────────────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ import type {
   AgentInput,
   Branch,
   BranchInput,
+  Claim,
+  ClaimInput,
   Commit,
   CommitInput,
   Pagination,
@@ -86,6 +88,19 @@ interface AgentRow {
   created_at: number
 }
 
+interface ClaimRow {
+  id: string
+  project_id: string
+  branch_id: string
+  task: string
+  agent_id: string
+  role: string
+  claimed_at: number
+  status: string
+  ttl: number
+  released_at: number | null
+}
+
 // ─── Row → domain type converters ───────────────────────────────────────────
 
 function toProject(row: ProjectRow): Project {
@@ -150,6 +165,21 @@ function toThread(row: ThreadRow): Thread {
   }
 }
 
+function toClaim(row: ClaimRow): Claim {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    branchId: row.branch_id,
+    task: row.task,
+    agentId: row.agent_id,
+    role: row.role as Claim['role'],
+    claimedAt: new Date(row.claimed_at),
+    status: row.status as Claim['status'],
+    ttl: row.ttl,
+    releasedAt: row.released_at ? new Date(row.released_at) : undefined,
+  }
+}
+
 function toAgent(row: AgentRow): Agent {
   return {
     id: row.id,
@@ -200,6 +230,12 @@ export class Queries {
     selectAgent: Statement<[string]>
     selectAgents: Statement<[string]>
     incrementAgentCommits: Statement<[number, string]>
+
+    insertClaim: Statement
+    selectClaim: Statement<[string]>
+    listActiveClaims: Statement<[string, number]>
+    updateClaimStatus: Statement
+    releaseClaimsByAgent: Statement<[number, string, string]>
   }
 
   constructor(db: Database) {
@@ -315,6 +351,30 @@ export class Queries {
       ),
       incrementAgentCommits: db.prepare(`
         UPDATE agents SET total_commits = total_commits + 1, last_seen = ? WHERE id = ?
+      `),
+
+      // Claims
+      insertClaim: db.prepare(`
+        INSERT INTO claims
+          (id, project_id, branch_id, task, agent_id, role, claimed_at, status, ttl, released_at)
+        VALUES
+          (@id, @project_id, @branch_id, @task, @agent_id, @role, @claimed_at, @status, @ttl, NULL)
+      `),
+      selectClaim: db.prepare(`SELECT * FROM claims WHERE id = ?`),
+      listActiveClaims: db.prepare(`
+        SELECT * FROM claims
+        WHERE project_id = ?
+          AND status != 'released'
+          AND (claimed_at + ttl) > ?
+        ORDER BY claimed_at ASC
+      `),
+      updateClaimStatus: db.prepare(`
+        UPDATE claims SET status = @status, released_at = @released_at WHERE id = @id
+      `),
+      releaseClaimsByAgent: db.prepare(`
+        UPDATE claims
+        SET status = 'released', released_at = ?
+        WHERE agent_id = ? AND branch_id = ? AND status != 'released'
       `),
     }
   }
@@ -557,6 +617,39 @@ export class Queries {
     return rows.map(toAgent)
   }
 
+  // ─── Claims ───────────────────────────────────────────────────────────────
+
+  insertClaim(id: string, projectId: string, branchId: string, input: ClaimInput): Claim {
+    const now = Date.now()
+    const ttl = input.ttl ?? 7_200_000
+    const status = input.status ?? 'proposed'
+    this.stmts.insertClaim.run({
+      id,
+      project_id: projectId,
+      branch_id: branchId,
+      task: input.task,
+      agent_id: input.agentId,
+      role: input.role,
+      claimed_at: now,
+      status,
+      ttl,
+    })
+    return toClaim(this.stmts.selectClaim.get(id) as ClaimRow)
+  }
+
+  listActiveClaims(projectId: string): Claim[] {
+    const rows = this.stmts.listActiveClaims.all(projectId, Date.now()) as ClaimRow[]
+    return rows.map(toClaim)
+  }
+
+  updateClaimStatus(id: string, status: string, releasedAt: number | null = null): void {
+    this.stmts.updateClaimStatus.run({ id, status, released_at: releasedAt })
+  }
+
+  releaseClaimsByAgent(agentId: string, branchId: string): void {
+    this.stmts.releaseClaimsByAgent.run(Date.now(), agentId, branchId)
+  }
+
   // ─── Session snapshot helpers ─────────────────────────────────────────────
 
   getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: string }): SessionSnapshot {
@@ -582,12 +675,15 @@ export class Queries {
     // All open threads for the project
     const openThreads = this.listOpenThreads(projectId)
 
+    const activeClaims = this.listActiveClaims(projectId)
+
     return {
       projectSummary,
       branchName: branch?.name ?? '',
       branchSummary,
       recentCommits,
       openThreads,
+      activeClaims,
     }
   }
 

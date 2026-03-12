@@ -26,10 +26,15 @@ export type CommitType =
   | 'merge' 
   | 'branch-init'
 
-export type BranchStatus = 
-  | 'active' 
-  | 'merged' 
+export type BranchStatus =
+  | 'active'
+  | 'merged'
   | 'abandoned'
+
+export type ClaimStatus =
+  | 'proposed'
+  | 'active'
+  | 'released'
 
 export type SnapshotFormat = 
   | 'agents-md' 
@@ -113,6 +118,19 @@ export interface Agent {
   createdAt: Date
 }
 
+export interface Claim {
+  id: string
+  projectId: string
+  branchId: string
+  task: string
+  agentId: string
+  role: AgentRole
+  claimedAt: Date
+  status: ClaimStatus
+  ttl: number          // ms, default 7_200_000 (2h)
+  releasedAt?: Date
+}
+
 // ============================================
 // Input Types (for creating entities)
 // ============================================
@@ -164,6 +182,14 @@ export interface AgentInput {
   displayName?: string
 }
 
+export interface ClaimInput {
+  task: string
+  agentId: string
+  role: AgentRole
+  status?: ClaimStatus   // defaults to 'proposed'
+  ttl?: number           // ms, defaults to 7_200_000 (2h)
+}
+
 // ============================================
 // Session Snapshot
 // ============================================
@@ -174,6 +200,7 @@ export interface SessionSnapshot {
   branchSummary: string        // max 500 tokens
   recentCommits: Commit[]      // last 3
   openThreads: Thread[]
+  activeClaims: Claim[]        // non-released, non-TTL-expired claims
 }
 
 // ============================================
