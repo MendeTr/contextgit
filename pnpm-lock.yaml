@@ -45,6 +45,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@contextgit/api':
+        specifier: workspace:*
+        version: link:../api
       '@contextgit/core':
         specifier: workspace:*
         version: link:../core
