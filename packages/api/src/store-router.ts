@@ -221,6 +221,43 @@ export function createStoreRouter(store: ContextStore): Router {
     } catch (e) { err(res, e) }
   })
 
+  // ── Claims ───────────────────────────────────────────────────────────────
+
+  r.post('/projects/:id/claims', async (req: Request, res: Response) => {
+    try {
+      const { branchId, ...input } = req.body as { branchId: string } & import('@contextgit/core').ClaimInput
+      const result = await store.claimTask(req.params['id']!, branchId, input)
+      res.status(201).json(result)
+    } catch (e) { err(res, e) }
+  })
+
+  r.delete('/claims/:claimId', async (req: Request, res: Response) => {
+    try {
+      await store.unclaimTask(req.params['claimId']!)
+      res.status(204).end()
+    } catch (e) { err(res, e) }
+  })
+
+  r.get('/projects/:id/claims', async (req: Request, res: Response) => {
+    try {
+      const result = await store.listActiveClaims(req.params['id']!)
+      res.json(result)
+    } catch (e) { err(res, e) }
+  })
+
+  // GET /projects/:id/delta?branchId=&since=  → getContextDelta
+  r.get('/projects/:id/delta', async (req: Request, res: Response) => {
+    try {
+      const projectId = req.params['id']!
+      const branchId = String(req.query['branchId'] ?? '')
+      const since = Number(req.query['since'])
+      if (!branchId) { res.status(400).json({ error: "'branchId' query param required" }); return }
+      if (isNaN(since)) { res.status(400).json({ error: "'since' must be a Unix ms timestamp" }); return }
+      const result = await store.getContextDelta(projectId, branchId, since)
+      res.json(result)
+    } catch (e) { err(res, e) }
+  })
+
   // ── Agents ────────────────────────────────────────────────────────────────
 
   r.post('/agents', async (req: Request, res: Response) => {

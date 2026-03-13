@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
 
 interface MigrationRow {
   version: number
@@ -69,6 +69,15 @@ const MIGRATIONS: Migration[] = [
     name: 'claims_table',
     run(db) {
       for (const sql of SCHEMA_V4_DDL) {
+        db.exec(sql)
+      }
+    },
+  },
+  {
+    version: 5,
+    name: 'multiagent_coordination',
+    run(db) {
+      for (const sql of SCHEMA_V5_DDL) {
         db.exec(sql)
       }
     },

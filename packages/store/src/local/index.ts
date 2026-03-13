@@ -24,6 +24,7 @@ import type {
   ClaimInput,
   Commit,
   CommitInput,
+  ContextDelta,
   Pagination,
   Project,
   ProjectInput,
@@ -366,6 +367,19 @@ export class LocalStore implements ContextStore {
   listActiveClaims(projectId: string): Promise<Claim[]> {
     try {
       return Promise.resolve(this.q.listActiveClaims(projectId))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  getContextDelta(projectId: string, branchId: string, since: number): Promise<ContextDelta> {
+    try {
+      const newCommits = this.q.listCommitsSince(branchId, since)
+      const threadChanges = this.q.listThreadChangesSince(projectId, since)
+      const openedThreads = threadChanges.filter((t) => t.status === 'open')
+      const closedThreads = threadChanges.filter((t) => t.status === 'closed')
+      const activeClaims = this.q.listActiveClaims(projectId)
+      return Promise.resolve({ newCommits, openedThreads, closedThreads, activeClaims, checkedAt: Date.now() })
     } catch (e) {
       return Promise.reject(e)
     }

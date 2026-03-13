@@ -155,3 +155,11 @@ export const SCHEMA_V4_DDL = [
   CREATE_CLAIMS,
   `CREATE INDEX IF NOT EXISTS idx_claims_project ON claims(project_id, status)`,
 ]
+
+// Migration v5 adds updated_at to threads and thread_id to claims for multi-agent coordination
+export const SCHEMA_V5_DDL = [
+  `ALTER TABLE threads ADD COLUMN updated_at INTEGER`,
+  `UPDATE threads SET updated_at = created_at`,
+  `CREATE TRIGGER IF NOT EXISTS threads_updated_at AFTER UPDATE ON threads BEGIN UPDATE threads SET updated_at = unixepoch() * 1000 WHERE id = NEW.id; END`,
+  `ALTER TABLE claims ADD COLUMN thread_id TEXT REFERENCES threads(id)`,
+]

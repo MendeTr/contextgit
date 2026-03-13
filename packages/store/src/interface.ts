@@ -8,6 +8,7 @@ import type {
   ClaimInput,
   Commit,
   CommitInput,
+  ContextDelta,
   Pagination,
   Project,
   ProjectInput,
@@ -59,4 +60,7 @@ export interface ContextStore {
   claimTask(projectId: string, branchId: string, input: ClaimInput): Promise<Claim>
   unclaimTask(claimId: string): Promise<void>
   listActiveClaims(projectId: string): Promise<Claim[]>
+
+  // Delta (polling)
+  getContextDelta(projectId: string, branchId: string, since: number): Promise<ContextDelta>
 }

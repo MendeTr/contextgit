@@ -13,6 +13,7 @@ import type {
   ClaimInput,
   Commit,
   CommitInput,
+  ContextDelta,
   Pagination,
   Project,
   ProjectInput,
@@ -284,6 +285,24 @@ export class RemoteStore implements ContextStore {
   async listActiveClaims(projectId: string): Promise<Claim[]> {
     const raw = await this.req<Raw[]>('GET', `/projects/${projectId}/claims`)
     return raw.map(parseClaim)
+  }
+
+  async getContextDelta(projectId: string, branchId: string, since: number): Promise<ContextDelta> {
+    const qs = `branchId=${encodeURIComponent(branchId)}&since=${since}`
+    const raw = await this.req<{
+      newCommits: Raw[]
+      openedThreads: Raw[]
+      closedThreads: Raw[]
+      activeClaims: Raw[]
+      checkedAt: number
+    }>('GET', `/projects/${projectId}/delta?${qs}`)
+    return {
+      newCommits: raw.newCommits.map(parseCommit),
+      openedThreads: raw.openedThreads.map(parseThread),
+      closedThreads: raw.closedThreads.map(parseThread),
+      activeClaims: raw.activeClaims.map(parseClaim),
+      checkedAt: raw.checkedAt,
+    }
   }
 
   // ── Agents ───────────────────────────────────────────────────────────────────
