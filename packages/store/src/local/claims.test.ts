@@ -188,3 +188,65 @@ describe('snapshot activeClaims', () => {
     store.close()
   })
 })
+
+describe('getContextDelta', () => {
+  it('returns newCommits created after since', async () => {
+    const { store, project, branch } = await setupStore()
+    const before = Date.now() - 1
+
+    await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'test',
+      workflowType: 'interactive',
+      message: 'commit after',
+      content: 'work',
+      summary: 'work',
+      commitType: 'manual',
+    })
+
+    const delta = await store.getContextDelta(project.id, branch.id, before)
+    expect(delta.newCommits).toHaveLength(1)
+    expect(delta.newCommits[0].message).toBe('commit after')
+    expect(delta.checkedAt).toBeGreaterThanOrEqual(before)
+
+    store.close()
+  })
+
+  it('returns activeClaims in delta', async () => {
+    const { store, project, branch } = await setupStore()
+
+    await store.claimTask(project.id, branch.id, { task: 'delta task', agentId: 'agent-1', role: 'dev' })
+
+    const delta = await store.getContextDelta(project.id, branch.id, 0)
+    expect(delta.activeClaims).toHaveLength(1)
+    expect(delta.activeClaims[0].task).toBe('delta task')
+
+    store.close()
+  })
+
+  it('returns empty arrays when nothing changed since', async () => {
+    const { store, project, branch } = await setupStore()
+
+    await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'test',
+      workflowType: 'interactive',
+      message: 'old commit',
+      content: 'work',
+      summary: 'work',
+      commitType: 'manual',
+    })
+
+    const since = Date.now() + 10_000 // future
+    const delta = await store.getContextDelta(project.id, branch.id, since)
+    expect(delta.newCommits).toHaveLength(0)
+    expect(delta.openedThreads).toHaveLength(0)
+    expect(delta.closedThreads).toHaveLength(0)
+
+    store.close()
+  })
+})
