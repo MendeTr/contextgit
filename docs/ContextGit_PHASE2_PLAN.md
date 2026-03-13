@@ -26,17 +26,17 @@ packages/
 │   ├── types.ts          ← add remote?, ciRunId?, pipelineName?, gitCommitSha?, gitBranch? to config/input types
 │   └── engine.ts         ← pass new EngineCommitInput fields through to store
 ├── store/src/
-│   ├── interface.ts      ← add options? param to getSessionSnapshot
+│   ├── interface.ts      ← add options? param to getSessionSnapshot; add claim/poll methods
 │   ├── local/
-│   │   ├── queries.ts    ← add selectRecentCommitsByRole prepared statement
-│   │   └── index.ts      ← role filter in getSessionSnapshot
+│   │   ├── queries.ts    ← add selectRecentCommitsByRole, listCommitsSince, listThreadChangesSince
+│   │   └── index.ts      ← role filter in getSessionSnapshot; inline claim status on threads
 │   └── remote/index.ts   ← add apiKey constructor param, Authorization header
 ├── mcp/src/
 │   ├── git-sync.ts       ← CREATE: captureGitMetadata(), installGitHooks()
-│   └── server.ts         ← fix double loadConfig(), add context_branch + context_merge tools
+│   └── server.ts         ← fix double loadConfig(), add context_branch + context_merge + context_claim + context_unclaim tools; since param on context_get; CONTEXTGIT_AGENT_ID env override
 ├── cli/src/commands/
 │   ├── init.ts           ← add --hooks, --remote, --role flags
-│   ├── commit.ts         ← add --ci-run-id, --pipeline flags + captureGitMetadata
+│   ├── commit.ts         ← add --ci-run-id, --pipeline flags + captureGitMetadata; positional message arg
 │   ├── branch.ts         ← CREATE
 │   ├── merge.ts          ← CREATE
 │   ├── search.ts         ← CREATE
@@ -44,7 +44,9 @@ packages/
 │   ├── push.ts           ← CREATE
 │   ├── pull.ts           ← CREATE
 │   ├── keygen.ts         ← CREATE
-│   └── doctor.ts         ← CREATE
+│   ├── doctor.ts         ← CREATE
+│   ├── claim.ts          ← CREATE
+│   └── unclaim.ts        ← CREATE
 └── api/src/
     ├── server.ts          ← mount /v1/store routes; add auth middleware
     └── middleware/
@@ -129,6 +131,7 @@ await engine.commit({ ..., gitCommitSha: git?.sha, gitBranch: git?.branch })
 `packages/cli/src/commands/init.ts`:
 - Add `--hooks` boolean flag
 - When set, call `installGitHooks(process.cwd())` after project creation
+- **On already-initialized projects: if `--hooks` flag is passed, always install hooks regardless of existing config**
 - Without the flag, print: `Tip: run "contextgit init --hooks" to auto-capture context on every git commit`
 
 **Week 5 Validation Gate:**
@@ -361,7 +364,8 @@ Writes `agentRole` to `.contextgit/config.json`.
 - Pass through to `CommitInput` (fields already exist in DB schema and `CommitInput` type)
 
 `packages/cli/src/commands/commit.ts`:
-- Add `--ci-run-id <id>` and `--pipeline <name>` flags
+- Add `--ci-run-id <id>` and `--pipeline <n>` flags
+- **Also fix: accept message as positional arg** — `contextgit commit "message"` must work in addition to `contextgit commit -m "message"`
 
 ### 8.2 — GitHub Actions templates
 
@@ -438,7 +442,7 @@ New test files:
 
 ---
 
-## Phase 2 Delta — Coordination Primitives (added 2026-03-12)
+## Phase 2 Delta 1 — Coordination Primitives (added 2026-03-12)
 
 **Status: IN PROGRESS — Phase 2 is NOT complete until this ships.**
 
@@ -488,6 +492,77 @@ TTL filter is in SQL (`claimed_at + ttl > now`) — not application code.
 
 ### Snapshot change
 `context_get` output gains `## Active Claims` section showing all non-released, non-TTL-expired claims.
+
+---
+
+## Phase 2 Delta 2 — Multi-Agent Orchestration Protocol (added 2026-03-13)
+
+**Status: READY TO BUILD — builds on top of Delta 1.**
+
+Delta 1 shipped claims for solo-agent collision prevention. Delta 2 extends this for true multi-agent orchestration: pre-claiming on behalf of other agents, polling for changes, and inline claim status in the snapshot.
+
+See `docs/ContextGit_DELTA_multiagent.md` for full spec.
+
+### Build Order (on top of Delta 1)
+
+1. **Migration: `updated_at` on threads + trigger**
+   ```sql
+   ALTER TABLE threads ADD COLUMN updated_at INTEGER;
+   UPDATE threads SET updated_at = created_at;
+   CREATE TRIGGER threads_updated_at AFTER UPDATE ON threads
+   BEGIN UPDATE threads SET updated_at = unixepoch() * 1000 WHERE id = NEW.id; END;
+   ```
+
+2. **Store queries: `listCommitsSince`, `listThreadChangesSince`**
+   - `SELECT * FROM commits WHERE branch_id = ? AND created_at > ? ORDER BY created_at ASC`
+   - `SELECT * FROM threads WHERE project_id = ? AND (created_at > ? OR updated_at > ?) ORDER BY created_at ASC`
+
+3. **`CONTEXTGIT_AGENT_ID` env override in MCP server**
+   ```typescript
+   const agentId = process.env.CONTEXTGIT_AGENT_ID ?? `${hostname}-mcp-claude-code-interactive`
+   ```
+
+4. **`for_agent_id` param on `context_claim` MCP tool**
+   - When set, uses target agent ID instead of calling agent ID
+   - No schema change — `agent_id` is already free-form text
+
+5. **`since` param on `context_get` (MCP + REST API)**
+   - Returns `{ newCommits, openedThreads, closedThreads, activeClaims, checkedAt }` when `since` is set
+   - Full snapshot when `since` is omitted (current behaviour)
+
+6. **Snapshot formatter: inline `[CLAIMED]` / `[FREE]` on threads**
+   - Each open thread prefixed with `[CLAIMED by {agentId}]` or `[FREE]`
+   - Matching: prefer `claim.threadId` direct linkage; fall back to case-insensitive substring match
+
+7. **`thread_id` on claims (schema + MCP param + formatter linkage)**
+   ```sql
+   ALTER TABLE claims ADD COLUMN thread_id TEXT REFERENCES threads(id);
+   ```
+   - Optional `thread_id` param on `context_claim` MCP tool
+   - Formatter uses `claim.threadId` for inline status when present
+
+### Validation Criteria
+
+1. Orchestrator calls `context_get`, sees 3 `[FREE]` threads
+2. Orchestrator pre-claims all 3 for dev-agent-1/2/3 using `for_agent_id`
+3. Each dev agent starts, calls `context_get`, sees exactly one `[CLAIMED]` thread — its own
+4. Dev agents work in parallel, each commits independently
+5. Orchestrator polling via `context_get(since=T)` detects each commit as it lands
+6. Orchestrator spawns test agent per completed dev commit
+7. Test agents start, see dev commits in snapshot, run tests, commit findings
+8. No duplicate work. No idle agents after pre-claim. No manual briefing.
+
+---
+
+## Known CLI Bugs (to fix before 0.0.4 publish)
+
+1. **`contextgit commit "message"` — positional arg not supported**
+   - File: `packages/cli/src/commands/commit.ts`
+   - Fix: add `static args = { message: Args.string({ required: false }) }` and resolve `flags.message ?? args.message`
+
+2. **`contextgit init --hooks` silently skips on already-initialized project**
+   - File: `packages/cli/src/commands/init.ts`
+   - Fix: when `--hooks` flag is passed, always run `installGitHooks()` regardless of whether config already exists
 
 ---
 
