@@ -1,6 +1,6 @@
 # ContextGit — Architecture Document
 
-**Version 3.0 | March 2026**
+**Version 3.1 | March 2026**
 **Status: Internal — Co-founder Review**
 
 ---
@@ -102,7 +102,8 @@ Creates a context checkpoint:
 2. Processes thread updates — marks open threads closed, creates new open threads
 3. Stores the commit: id, parent_id, branch_id, agent_id, role, tool, workflow_type, message, content, summary, threads, embedding, commit_type
 4. Updates branch HEAD
-5. Returns commit id
+5. Auto-releases any active claims for this agent on this branch
+6. Returns commit id
 
 **BRANCH(name, from_commit_id?)**
 
@@ -168,6 +169,7 @@ interface Thread {
   closedInCommit?: string
   closedNote?: string
   workflowType?: string            // which workflow opened this thread
+  updatedAt: number                // updated on status change (for polling)
 }
 ```
 
@@ -222,11 +224,17 @@ What this line of work has done and where it stands.
 [<timestamp>] "<message>"  by <agent-role> via <tool> (<workflow-type>)
 
 === OPEN THREADS ===
-[ ] <description>   (opened <date>, <branch>, <workflow-type>)
-[ ] <description>   (opened <date>, <branch>, <workflow-type>)
+[CLAIMED by dev-agent-1] <description>   (opened <date>, <branch>)
+[FREE] <description>   (opened <date>, <branch>)
+[FREE] <description>   (opened <date>, <branch>)
+
+=== ACTIVE CLAIMS ===
+<agent-id>: "<task>"  (claimed <time-ago>, TTL 2h)
 ```
 
 **Total budget: ~400–600 tokens. Flat cost regardless of project age.**
+
+The `[CLAIMED]` / `[FREE]` prefix on open threads is the primary collision-prevention signal. Any agent reading the snapshot immediately sees what is taken and what is available without parsing a separate section.
 
 ### 4.2 AGENTS.md Export
 
@@ -253,8 +261,8 @@ Upstash client installed. Middleware skeleton in place.
 - [yesterday] Rate limit middleware skeleton created (dev, Ralph loop)
 
 ## Open Threads
-- [ ] Sliding window vs fixed window — not yet decided
-- [ ] Test coverage for rate limiter — pending
+- [CLAIMED by dev-agent-1] Sliding window vs fixed window — not yet decided
+- [FREE] Test coverage for rate limiter — pending
 
 ## Build & Run
 <operational notes from AGENTS.md commits>
@@ -460,7 +468,124 @@ Every agent writes directly to the shared store. Every commit is attributed to i
 
 Append-only commits mean concurrent writes from multiple agents across multiple workflows do not conflict.
 
-### 6.3 Multi-Agent + Multi-Workflow Example
+### 6.3 Agent ID
+
+Every agent has a stable, predictable ID. The MCP server derives its ID from hostname by default:
+
+```typescript
+const agentId = process.env.CONTEXTGIT_AGENT_ID
+  ?? `${hostname}-mcp-claude-code-interactive`
+```
+
+The `CONTEXTGIT_AGENT_ID` environment variable takes priority. Orchestrators set this variable when spawning sub-agent MCP processes to give each agent a stable, known ID:
+
+| Agent | ID convention |
+|-------|---------------|
+| Orchestrator | `{hostname}-orchestrator` |
+| Dev agent 1 | `{hostname}-dev-1` |
+| Dev agent 2 | `{hostname}-dev-2` |
+| Test agent 1 | `{hostname}-test-1` |
+
+### 6.4 Coordination: Claims
+
+Claims are the collision-prevention primitive. Before starting any task, an agent claims it. The claim is visible to all other agents in the snapshot.
+
+```sql
+CREATE TABLE claims (
+  id           TEXT PRIMARY KEY,
+  project_id   TEXT NOT NULL REFERENCES projects(id),
+  branch_id    TEXT NOT NULL REFERENCES branches(id),
+  task         TEXT NOT NULL,
+  agent_id     TEXT NOT NULL,
+  role         TEXT NOT NULL,
+  claimed_at   INTEGER NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'proposed',
+  ttl          INTEGER NOT NULL,     -- milliseconds, default 7200000 (2h)
+  released_at  INTEGER,
+  thread_id    TEXT REFERENCES threads(id)  -- optional direct thread linkage
+)
+```
+
+**Claim lifecycle:** `proposed → active → released`
+
+- Claim is created with status `proposed`
+- Agent starts work → status becomes `active`
+- Agent calls `context_commit` → claim auto-releases (branch-scoped)
+- Agent calls `contextgit unclaim <id>` → immediate manual release
+- TTL expires (2h) → claim treated as released in all queries (filtered in SQL)
+
+**Auto-release on commit** prevents orphaned claims. If an agent crashes without committing, the 2h TTL ensures the task becomes available again without manual intervention.
+
+### 6.5 Coordination: Pre-claiming by Orchestrator
+
+The orchestrator can claim tasks on behalf of agents before spawning them. This eliminates the race window between agent start and first `context_get`:
+
+```typescript
+// context_claim MCP tool — for_agent_id param
+for_agent_id: z.string().optional().describe(
+  'If set, creates the claim on behalf of this agent ID instead of the calling agent. '
+  + 'Used by orchestrators to pre-assign work before spawning sub-agents.'
+)
+```
+
+When `for_agent_id` is set, `claim.agentId` is set to the target agent ID, not the orchestrator's ID.
+
+### 6.6 Coordination: Orchestrator Polling
+
+The orchestrator polls for changes without re-reading the full snapshot using the `since` parameter on `context_get`:
+
+```typescript
+// context_get MCP tool — since param
+since: z.number().optional().describe(
+  'Unix timestamp ms. When provided, returns only commits and thread changes '
+  + 'after this time. Omits projectSummary and branchSummary. '
+  + 'Use this for orchestrator polling loops.'
+)
+```
+
+**When `since` is provided, response shape:**
+
+```typescript
+{
+  newCommits: Commit[]        // commits created after `since` on this branch
+  openedThreads: Thread[]     // threads opened after `since`
+  closedThreads: Thread[]     // threads closed after `since`
+  activeClaims: Claim[]       // always full list
+  checkedAt: number           // timestamp to use as next `since` value
+}
+```
+
+The orchestrator passes `checkedAt` as the next `since` value, creating an efficient polling loop with no duplicate reads.
+
+### 6.7 Multi-Agent Coordination Workflow (Model A)
+
+ContextGit is the **memory and coordination layer**. The orchestration framework (Claude Code subagents, claude-flow, etc.) is the **task router**. They do not overlap.
+
+```
+Orchestrator starts
+  → context_get: sees open threads [A, B, C] — all [FREE]
+  → pre-claims thread A for dev-agent-1  (for_agent_id="{hostname}-dev-1")
+  → pre-claims thread B for dev-agent-2  (for_agent_id="{hostname}-dev-2")
+  → pre-claims thread C for dev-agent-3  (for_agent_id="{hostname}-dev-3")
+  → spawns dev-agent-1 with CONTEXTGIT_AGENT_ID="{hostname}-dev-1"
+  → spawns dev-agent-2 with CONTEXTGIT_AGENT_ID="{hostname}-dev-2"
+  → spawns dev-agent-3 with CONTEXTGIT_AGENT_ID="{hostname}-dev-3"
+  → begins polling: context_get(since=now) every 30s
+
+Dev agent 1 starts
+  → context_get: sees [CLAIMED by {hostname}-dev-1] thread A — starts work
+  → context_commit: claim auto-releases
+
+Orchestrator polling detects new commit from dev-agent-1
+  → spawns test-agent-1 ("test the work in commit XYZ, thread A")
+  → test-agent-1 context_get → sees dev commit → tests → context_commit findings
+
+Orchestrator detects test pass → closes thread A
+```
+
+No agent is manually briefed. No context is duplicated. The orchestrator reacts to commits, not to a fixed schedule.
+
+### 6.8 Multi-Agent + Multi-Workflow Example
 
 ```
 feature/payments — 3 agents, 2 workflow types
@@ -481,8 +606,8 @@ CI pipeline (triggered by push):
 Developer opens interactive session (morning):
   → context_get scope=global
   → snapshot shows: Stripe implemented (Ralph loop), test edge case found (CI)
-  → open thread: duplicate webhook issue
-  → developer's Claude Code agent picks up the thread immediately
+  → open thread: [FREE] duplicate webhook issue
+  → developer's Claude Code agent claims thread, picks it up immediately
   → context_commit role=dev workflow=interactive
     "Idempotency key includes retry count. Duplicate issue resolved."
     threads.close: ["network retry duplicate webhook — needs idempotency fix"]
@@ -553,7 +678,7 @@ interface ContextStore {
   createCommit(commit: CommitInput): Promise<Commit>
   getCommit(id: string): Promise<Commit | null>
   listCommits(branchId: string, pagination: Pagination): Promise<Commit[]>
-  getSessionSnapshot(projectId: string, branchId: string): Promise<SessionSnapshot>
+  getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: AgentRole }): Promise<SessionSnapshot>
   getFormattedSnapshot(projectId: string, branchId: string, format: SnapshotFormat): Promise<string>
 
   // Branches
@@ -567,6 +692,15 @@ interface ContextStore {
   // Open threads
   listOpenThreads(projectId: string): Promise<Thread[]>
   listOpenThreadsByBranch(branchId: string): Promise<Thread[]>
+
+  // Claims
+  claimTask(projectId: string, branchId: string, input: ClaimInput): Promise<Claim>
+  unclaimTask(claimId: string): Promise<void>
+  listActiveClaims(projectId: string): Promise<Claim[]>
+
+  // Polling
+  listCommitsSince(branchId: string, since: number): Promise<Commit[]>
+  listThreadChangesSince(projectId: string, since: number): Promise<Thread[]>
 
   // Search
   semanticSearch(query: string, projectId: string, limit: number): Promise<SearchResult[]>
@@ -636,7 +770,22 @@ CREATE TABLE threads (
   opened_in_commit TEXT NOT NULL REFERENCES commits(id),
   closed_in_commit TEXT REFERENCES commits(id),
   closed_note TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER   -- updated on status change; used for since-based polling
+);
+
+CREATE TABLE claims (
+  id           TEXT PRIMARY KEY,
+  project_id   TEXT NOT NULL REFERENCES projects(id),
+  branch_id    TEXT NOT NULL REFERENCES branches(id),
+  task         TEXT NOT NULL,
+  agent_id     TEXT NOT NULL,
+  role         TEXT NOT NULL,
+  claimed_at   INTEGER NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'proposed',
+  ttl          INTEGER NOT NULL,
+  released_at  INTEGER,
+  thread_id    TEXT REFERENCES threads(id)
 );
 
 CREATE TABLE agents (
@@ -660,6 +809,7 @@ CREATE INDEX idx_commits_branch ON commits(branch_id, created_at DESC);
 CREATE INDEX idx_commits_workflow ON commits(project_id, workflow_type, created_at DESC);
 CREATE INDEX idx_threads_project_status ON threads(project_id, status);
 CREATE INDEX idx_branches_git ON branches(project_id, git_branch);
+CREATE INDEX idx_claims_project_status ON claims(project_id, status, released_at);
 ```
 
 ### 8.3 RemoteStore (Postgres + pgvector)
@@ -726,7 +876,11 @@ CREATE POLICY "org members see own projects or public"
 ### 8.4 getSessionSnapshot Implementation
 
 ```typescript
-async getSessionSnapshot(projectId: string, branchId: string): Promise<SessionSnapshot> {
+async getSessionSnapshot(
+  projectId: string,
+  branchId: string,
+  options?: { agentRole?: AgentRole }
+): Promise<SessionSnapshot> {
   const headCommit = await this.getHeadCommit(branchId)
   const branch = await this.getBranch(branchId)
 
@@ -734,31 +888,27 @@ async getSessionSnapshot(projectId: string, branchId: string): Promise<SessionSn
     ? await this.getHeadCommitSummary(branch.parentBranchId)
     : headCommit.summary
 
-  const recentCommits = await this.listCommits(branchId, { limit: 3 })
+  // Role-filtered or default commit list
+  const recentCommits = options?.agentRole
+    ? await this.listCommitsByRole(branchId, options.agentRole, 3)
+    : await this.listCommits(branchId, { limit: 3 })
+
   const openThreads = await this.listOpenThreads(projectId)
+  const activeClaims = await this.listActiveClaims(projectId)
+
+  // Inline claim status on threads
+  const threadsWithClaimStatus = openThreads.map(t => ({
+    ...t,
+    claimStatus: resolveClaimStatus(t, activeClaims)
+  }))
 
   return {
-    projectSummary,           // max 2000 tokens
+    projectSummary,
     branchName: branch.name,
-    branchSummary: headCommit.summary,  // max 500 tokens
-    recentCommits,            // last 3, full content with workflow attribution
-    openThreads,              // all open, short descriptions with workflow type
-  }
-}
-
-async getFormattedSnapshot(
-  projectId: string,
-  branchId: string,
-  format: 'agents-md' | 'json' | 'text'
-): Promise<string> {
-  const snapshot = await this.getSessionSnapshot(projectId, branchId)
-
-  if (format === 'agents-md') {
-    return formatAsAgentsMd(snapshot)   // Ralph-compatible markdown
-  } else if (format === 'json') {
-    return JSON.stringify(snapshot)
-  } else {
-    return formatAsText(snapshot)
+    branchSummary: headCommit.summary,
+    recentCommits,
+    openThreads: threadsWithClaimStatus,
+    activeClaims,
   }
 }
 ```
@@ -790,7 +940,14 @@ Generates `.contextgit/config.json`:
 }
 ```
 
-**MCP Tools exposed to agent:** `context_get`, `context_commit`, `context_branch`, `context_merge` — same as before. See prior version for full tool schemas.
+**MCP Tools exposed to agent:**
+
+- `context_get` — session start snapshot. Optional `agent_role` filter. Optional `since` timestamp for orchestrator polling.
+- `context_commit` — checkpoint with message, content, threads. Auto-releases active claims on commit.
+- `context_branch` — create a context branch
+- `context_merge` — merge a context branch
+- `context_claim` — claim a task before starting. Optional `for_agent_id` for orchestrator pre-claiming. Optional `thread_id` for direct thread linkage.
+- `context_unclaim` — release a claim manually
 
 **Background snapshotting:** MCP server counts tool calls and auto-commits every N calls (default 10). Tagged `commit_type: auto`, displayed differently in the web UI, can be promoted to manual.
 
@@ -802,6 +959,9 @@ You have access to a persistent context system. Use it consistently.
 ALWAYS at session start: call context_get scope="global". This returns a compact
 snapshot (~500 tokens) of project state, branch, recent commits, and open threads.
 Read it before doing anything else.
+
+BEFORE starting any task: call context_claim to claim it. This prevents other agents
+from starting the same work simultaneously. Claims auto-release on context_commit.
 
 DURING work, call context_commit when you: complete a feature or fix, make an
 architectural decision, discover a failed approach, open or close a thread.
@@ -826,49 +986,23 @@ contextgit init                          # init project, generate config, instal
 contextgit snapshot                      # print snapshot to stdout (text format)
 contextgit snapshot --format agents-md   # print AGENTS.md formatted snapshot
 contextgit snapshot --format json        # print JSON snapshot
-contextgit commit --message "..."        # create a context commit
-contextgit commit --message "..." \
+contextgit commit -m "..."              # create a context commit
+contextgit commit -m "..." \
   --workflow-type ralph-loop \
   --loop-iteration 42                    # commit with workflow metadata
-contextgit search "query"                # semantic search, prints results
-contextgit branch create <name>          # create context branch
-contextgit branch merge <name>           # merge context branch
-contextgit clone <url>                   # clone public context repository
+contextgit claim "<task>"               # claim a task before starting
+contextgit unclaim <claim-id>           # release a claim manually
+contextgit search "query"               # semantic search, prints results
+contextgit branch create <n>            # create context branch
+contextgit branch merge <n>             # merge context branch
 contextgit push                          # push local context to remote store
 contextgit pull                          # pull remote context to local store
 contextgit status                        # show current branch, head commit, open threads
+contextgit doctor                        # check config, DB, hooks, API key, MCP registration
 
 # Remote store flags (override config)
 contextgit snapshot --store <url> --api-key <key>
 contextgit commit --store <url> --api-key <key>
-```
-
-**Ralph loop integration (canonical pattern):**
-
-```bash
-#!/bin/bash
-ITERATION=0
-
-while true; do
-  # Auto-generate AGENTS.md — never manually maintained
-  contextgit snapshot --format agents-md > AGENTS.md
-
-  # Ralph iteration
-  cat PROMPT.md | claude -p \
-    --dangerously-skip-permissions \
-    --output-format=stream-json \
-    --model opus \
-    --verbose
-
-  # Checkpoint context
-  contextgit commit \
-    --message "$(git log -1 --pretty=%s)" \
-    --workflow-type ralph-loop \
-    --loop-iteration $ITERATION
-
-  git push origin "$(git branch --show-current)"
-  ITERATION=$((ITERATION + 1))
-done
 ```
 
 ### 9.3 REST API
@@ -889,12 +1023,16 @@ POST   /v1/projects/:id/commits
 GET    /v1/projects/:id/commits/:commitId
 GET    /v1/projects/:id/snapshot                    ← session start contract (JSON)
 GET    /v1/projects/:id/snapshot?format=agents-md   ← AGENTS.md format
+GET    /v1/projects/:id/snapshot?since=<timestamp>  ← orchestrator polling (delta only)
 POST   /v1/projects/:id/branches
 PATCH  /v1/projects/:id/branches/:branchId
 POST   /v1/projects/:id/branches/:branchId/merge
 POST   /v1/projects/:id/search
 GET    /v1/projects/:id/threads?status=open
 GET    /v1/projects/:id/agents
+POST   /v1/projects/:id/claims
+DELETE /v1/projects/:id/claims/:claimId
+GET    /v1/projects/:id/claims?status=active
 ```
 
 **Platform operations (web frontend)**
@@ -922,6 +1060,8 @@ WS /v1/projects/:id/live
 { type: "agent_active",  agentId, role, tool, workflowType, branchName, timestamp }
 { type: "loop_iteration", loopIteration, agentId, branchName, timestamp }  // Ralph loops
 { type: "ci_run",        ciRunId, pipelineName, status, branchName, timestamp }  // CI
+{ type: "claim_created", claimId, agentId, task, threadId, timestamp }
+{ type: "claim_released", claimId, agentId, timestamp }
 ```
 
 ### 10.3 Clone Bundle
@@ -968,7 +1108,7 @@ Response: application/zip
 
 **Commit diff view** — Previous vs new summary, full content, thread operations, full attribution: agent, role, tool, workflow type, loop iteration or CI run ID if applicable.
 
-**Threads panel** — Open and closed threads across all workflows. Filterable by branch, workflow type, agent, date. Closed threads show resolution note and linked commit.
+**Threads panel** — Open and closed threads across all workflows. Filterable by branch, workflow type, agent, date. Closed threads show resolution note and linked commit. Open threads show `[CLAIMED by X]` or `[FREE]` status.
 
 **Workflow breakdown page (`/workflows`)** — New in v3. Shows contribution breakdown by workflow type: how many commits came from interactive sessions vs Ralph loops vs CI vs background agents. Timeline of activity. Helps teams understand how their agents are actually being used.
 
@@ -1000,6 +1140,7 @@ Organization  1──* Project
 Project       1──* Branch
 Project       1──* Thread
 Project       1──* Agent
+Project       1──* Claim
 Branch        1──* Commit
 Branch        0──1 Branch    (parent)
 Branch        0──1 GitPR     (linked PR URL)
@@ -1007,10 +1148,12 @@ Commit        0──1 Commit    (parent)
 Commit        0──1 Branch    (merge source)
 Commit        1──* Thread    (opened or closed in this commit)
 Commit        *──1 WorkflowMeta  (type, loop iteration, CI run ID)
+Claim         *──1 Thread    (optional direct linkage via thread_id)
 Agent         *──1 User
 Agent         *──1 Role
 Agent         *──1 WorkflowType
 Agent         1──* Commit
+Agent         1──* Claim
 ```
 
 ### 12.2 Key Field Constraints
@@ -1021,6 +1164,7 @@ Agent         1──* Commit
 - Commit content: unbounded
 - Embeddings: 384 dimensions (all-MiniLM-L6-v2, configurable)
 - Workflow type: enum `interactive | ralph-loop | ci | background | custom`
+- Claim TTL: default 7200000ms (2 hours); TTL filter applied in SQL
 
 ---
 
@@ -1105,7 +1249,20 @@ Supabase free tier covers all development and early beta. Upgrade to Supabase Pr
 | 7 | CI integration — GitHub Actions example workflow, tested end to end. Context sync push/pull. |
 | 8 | Multi-workflow test: Ralph loop + interactive session + CI pipeline, all writing to same project. Validate cross-workflow context retrieval. |
 
-**Phase 2 gate:** Three different workflow types contributing to the same project context store. Each workflow's snapshot reflects commits from the others.
+**Phase 2 delta — Multi-agent coordination (added 2026-03-13):**
+
+See `docs/ContextGit_DELTA_multiagent.md` for full spec.
+
+Build order:
+1. Migration: `updated_at` on threads + trigger
+2. Store queries: `listCommitsSince`, `listThreadChangesSince`
+3. `CONTEXTGIT_AGENT_ID` env override in MCP server
+4. `for_agent_id` param on `context_claim`
+5. `since` param on `context_get` (MCP + REST API)
+6. Snapshot formatter: inline `[CLAIMED]` / `[FREE]` on threads
+7. `thread_id` on claims (schema + MCP param + formatter linkage)
+
+**Phase 2 gate:** Three different workflow types contributing to the same project context store. Each workflow's snapshot reflects commits from the others. Orchestrator can pre-claim, poll, and spawn agents without collision.
 
 ### Phase 3 — Weeks 9–14: Web Platform
 
@@ -1135,6 +1292,8 @@ Supabase free tier covers all development and early beta. Upgrade to Supabase Pr
 **Thread granularity** — Per-project threads are simpler and always visible. Per-branch threads are more organised but risk siloing unresolved questions. Recommendation: per-project with branch attribution.
 
 **Public platform timing** — Invite-only for first 30 days to ensure quality of early public repos. Open after.
+
+**Claim string matching vs thread_id linkage** — The inline `[CLAIMED]` formatter should prefer `thread_id` direct linkage over case-insensitive string matching. String matching is a fallback for legacy claims only. Orchestrators should always pass `thread_id` when pre-claiming to ensure reliable linkage.
 
 ---
 
