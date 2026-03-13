@@ -24,6 +24,14 @@ export default class ClaimCmd extends Command {
       default: 'proposed',
       options: ['proposed', 'active'],
     }),
+    'for-agent-id': Flags.string({
+      description: 'Claim on behalf of this agent ID (pre-claiming by orchestrator)',
+      required: false,
+    }),
+    'thread-id': Flags.string({
+      description: 'Direct thread ID link for this claim',
+      required: false,
+    }),
   }
 
   async run(): Promise<void> {
@@ -31,27 +39,30 @@ export default class ClaimCmd extends Command {
     const config = loadConfig()
     const store = new LocalStore(config.projectId)
 
-    // Resolve current branch
-    const branch = await store.getBranchByGitName(config.projectId, 'main')
     const branches = await store.listBranches(config.projectId)
     const activeBranch = branches.find((b) => b.status === 'active') ?? branches[0]
     if (!activeBranch) {
       this.error('No branch found. Run contextgit init first.')
     }
 
+    const agentId = flags['for-agent-id'] ?? `cli-${process.env.USER ?? 'unknown'}`
+
     const claim = await store.claimTask(config.projectId, activeBranch.id, {
       task: args.task,
-      agentId: `cli-${process.env.USER ?? 'unknown'}`,
+      agentId,
       role: config.agentRole ?? 'solo',
       status: flags.status as 'proposed' | 'active',
       ttl: flags.ttl * 3_600_000,
+      threadId: flags['thread-id'],
     })
 
     this.log(`Claimed.`)
-    this.log(`ID:     ${claim.id}`)
-    this.log(`Task:   ${claim.task}`)
-    this.log(`Status: ${claim.status}`)
-    this.log(`TTL:    ${flags.ttl}h`)
+    this.log(`ID:        ${claim.id}`)
+    this.log(`Task:      ${claim.task}`)
+    this.log(`Agent:     ${claim.agentId}`)
+    this.log(`Thread ID: ${claim.threadId ?? '(none)'}`)
+    this.log(`Status:    ${claim.status}`)
+    this.log(`TTL:       ${flags.ttl}h`)
 
     store.close()
   }
