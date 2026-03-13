@@ -104,6 +104,7 @@ export interface Thread {
   closedInCommit?: string
   closedNote?: string
   createdAt: Date
+  updatedAt?: Date
 }
 
 export interface Agent {
@@ -129,6 +130,7 @@ export interface Claim {
   status: ClaimStatus
   ttl: number          // ms, default 7_200_000 (2h)
   releasedAt?: Date
+  threadId?: string
 }
 
 // ============================================
@@ -188,6 +190,7 @@ export interface ClaimInput {
   role: AgentRole
   status?: ClaimStatus   // defaults to 'proposed'
   ttl?: number           // ms, defaults to 7_200_000 (2h)
+  threadId?: string
 }
 
 // ============================================
@@ -201,6 +204,14 @@ export interface SessionSnapshot {
   recentCommits: Commit[]      // last 3
   openThreads: Thread[]
   activeClaims: Claim[]        // non-released, non-TTL-expired claims
+}
+
+export interface ContextDelta {
+  newCommits: Commit[]
+  openedThreads: Thread[]
+  closedThreads: Thread[]
+  activeClaims: Claim[]
+  checkedAt: number
 }
 
 // ============================================

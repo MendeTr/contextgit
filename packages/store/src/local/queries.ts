@@ -74,6 +74,7 @@ interface ThreadRow {
   closed_in_commit: string | null
   closed_note: string | null
   created_at: number
+  updated_at: number | null
 }
 
 interface AgentRow {
@@ -99,6 +100,7 @@ interface ClaimRow {
   status: string
   ttl: number
   released_at: number | null
+  thread_id: string | null
 }
 
 // ─── Row → domain type converters ───────────────────────────────────────────
@@ -162,6 +164,7 @@ function toThread(row: ThreadRow): Thread {
     closedInCommit: row.closed_in_commit ?? undefined,
     closedNote: row.closed_note ?? undefined,
     createdAt: new Date(row.created_at),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
   }
 }
 
@@ -177,6 +180,7 @@ function toClaim(row: ClaimRow): Claim {
     status: row.status as Claim['status'],
     ttl: row.ttl,
     releasedAt: row.released_at ? new Date(row.released_at) : undefined,
+    threadId: row.thread_id ?? undefined,
   }
 }
 
@@ -236,6 +240,9 @@ export class Queries {
     listActiveClaims: Statement<[string, number]>
     updateClaimStatus: Statement
     releaseClaimsByAgent: Statement<[number, string, string]>
+
+    selectCommitsSince: Statement<[string, number]>
+    selectThreadChangesSince: Statement<[string, number, number]>
   }
 
   constructor(db: Database) {
@@ -356,9 +363,9 @@ export class Queries {
       // Claims
       insertClaim: db.prepare(`
         INSERT INTO claims
-          (id, project_id, branch_id, task, agent_id, role, claimed_at, status, ttl, released_at)
+          (id, project_id, branch_id, task, agent_id, role, claimed_at, status, ttl, released_at, thread_id)
         VALUES
-          (@id, @project_id, @branch_id, @task, @agent_id, @role, @claimed_at, @status, @ttl, NULL)
+          (@id, @project_id, @branch_id, @task, @agent_id, @role, @claimed_at, @status, @ttl, NULL, @thread_id)
       `),
       selectClaim: db.prepare(`SELECT * FROM claims WHERE id = ?`),
       listActiveClaims: db.prepare(`
@@ -375,6 +382,13 @@ export class Queries {
         UPDATE claims
         SET status = 'released', released_at = ?
         WHERE agent_id = ? AND branch_id = ? AND status != 'released'
+      `),
+
+      selectCommitsSince: db.prepare(`
+        SELECT * FROM commits WHERE branch_id = ? AND created_at > ? ORDER BY created_at ASC
+      `),
+      selectThreadChangesSince: db.prepare(`
+        SELECT * FROM threads WHERE project_id = ? AND (created_at > ? OR updated_at > ?) ORDER BY created_at ASC
       `),
     }
   }
@@ -633,6 +647,7 @@ export class Queries {
       claimed_at: now,
       status,
       ttl,
+      thread_id: input.threadId ?? null,
     })
     return toClaim(this.stmts.selectClaim.get(id) as ClaimRow)
   }
@@ -648,6 +663,16 @@ export class Queries {
 
   releaseClaimsByAgent(agentId: string, branchId: string): void {
     this.stmts.releaseClaimsByAgent.run(Date.now(), agentId, branchId)
+  }
+
+  listCommitsSince(branchId: string, since: number): Commit[] {
+    const rows = this.stmts.selectCommitsSince.all(branchId, since) as CommitRow[]
+    return rows.map(toCommit)
+  }
+
+  listThreadChangesSince(projectId: string, since: number): Thread[] {
+    const rows = this.stmts.selectThreadChangesSince.all(projectId, since, since) as ThreadRow[]
+    return rows.map(toThread)
   }
 
   // ─── Session snapshot helpers ─────────────────────────────────────────────
