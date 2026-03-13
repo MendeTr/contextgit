@@ -503,43 +503,122 @@ Delta 1 shipped claims for solo-agent collision prevention. Delta 2 extends this
 
 See `docs/ContextGit_DELTA_multiagent.md` for full spec.
 
-### Build Order (on top of Delta 1)
+### Implementation Plan (8 steps)
 
-1. **Migration: `updated_at` on threads + trigger**
-   ```sql
-   ALTER TABLE threads ADD COLUMN updated_at INTEGER;
-   UPDATE threads SET updated_at = created_at;
-   CREATE TRIGGER threads_updated_at AFTER UPDATE ON threads
-   BEGIN UPDATE threads SET updated_at = unixepoch() * 1000 WHERE id = NEW.id; END;
-   ```
+> **Note on step numbering vs delta doc:** The delta doc numbers formatter as step 6 and `thread_id` as step 7. This plan folds the `thread_id` schema change into Step 1 (single migration v5) and the `thread_id` MCP param into Step 7. The formatter runs last. Follow this numbering.
 
-2. **Store queries: `listCommitsSince`, `listThreadChangesSince`**
-   - `SELECT * FROM commits WHERE branch_id = ? AND created_at > ? ORDER BY created_at ASC`
-   - `SELECT * FROM threads WHERE project_id = ? AND (created_at > ? OR updated_at > ?) ORDER BY created_at ASC`
+#### Step 1 — Migration v5 (`packages/store/src/local/schema.ts` + `migrations.ts`)
 
-3. **`CONTEXTGIT_AGENT_ID` env override in MCP server**
-   ```typescript
-   const agentId = process.env.CONTEXTGIT_AGENT_ID ?? `${hostname}-mcp-claude-code-interactive`
-   ```
+Add `SCHEMA_V5_DDL` to `schema.ts`:
+```sql
+ALTER TABLE threads ADD COLUMN updated_at INTEGER;
+UPDATE threads SET updated_at = created_at;
+CREATE TRIGGER IF NOT EXISTS threads_updated_at AFTER UPDATE ON threads
+BEGIN UPDATE threads SET updated_at = unixepoch() * 1000 WHERE id = NEW.id; END;
+ALTER TABLE claims ADD COLUMN thread_id TEXT REFERENCES threads(id);
+```
 
-4. **`for_agent_id` param on `context_claim` MCP tool**
-   - When set, uses target agent ID instead of calling agent ID
-   - No schema change — `agent_id` is already free-form text
+Add to `migrations.ts`:
+```typescript
+{ version: 5, name: 'multiagent_coordination', run(db) { for (const sql of SCHEMA_V5_DDL) db.exec(sql) } }
+```
 
-5. **`since` param on `context_get` (MCP + REST API)**
-   - Returns `{ newCommits, openedThreads, closedThreads, activeClaims, checkedAt }` when `since` is set
-   - Full snapshot when `since` is omitted (current behaviour)
+#### Step 2 — Types (`packages/core/src/types.ts`)
 
-6. **Snapshot formatter: inline `[CLAIMED]` / `[FREE]` on threads**
-   - Each open thread prefixed with `[CLAIMED by {agentId}]` or `[FREE]`
-   - Matching: prefer `claim.threadId` direct linkage; fall back to case-insensitive substring match
+- `Thread`: add `updatedAt?: Date`
+- `Claim`: add `threadId?: string`
+- `ClaimInput`: add `threadId?: string`
+- New export:
+  ```typescript
+  export interface ContextDelta {
+    newCommits: Commit[]
+    openedThreads: Thread[]
+    closedThreads: Thread[]
+    activeClaims: Claim[]
+    checkedAt: number
+  }
+  ```
+- `SessionSnapshot.activeClaims: Claim[]` is already present (Delta 1). No change needed.
 
-7. **`thread_id` on claims (schema + MCP param + formatter linkage)**
-   ```sql
-   ALTER TABLE claims ADD COLUMN thread_id TEXT REFERENCES threads(id);
-   ```
-   - Optional `thread_id` param on `context_claim` MCP tool
-   - Formatter uses `claim.threadId` for inline status when present
+#### Step 3 — Store queries (`packages/store/src/local/queries.ts`)
+
+- `ThreadRow`: add `updated_at: number | null`
+- `ClaimRow`: add `thread_id: string | null`
+- `toThread`: add `updatedAt: row.updated_at ? new Date(row.updated_at) : undefined`
+- `toClaim`: add `threadId: row.thread_id ?? undefined`
+- Update `insertClaim` SQL to include `thread_id` column
+- Add two prepared statements:
+  ```sql
+  selectCommitsSince: SELECT * FROM commits WHERE branch_id = ? AND created_at > ? ORDER BY created_at ASC
+  selectThreadChangesSince: SELECT * FROM threads WHERE project_id = ? AND (created_at > ? OR updated_at > ?) ORDER BY created_at ASC
+  ```
+- Add methods: `listCommitsSince(branchId, since)`, `listThreadChangesSince(projectId, since)`
+
+#### Step 4 — Store interface (`packages/store/src/interface.ts`)
+
+```typescript
+import type { ContextDelta } from '@contextgit/core'
+// Add to ContextStore:
+getContextDelta(projectId: string, branchId: string, since: number): Promise<ContextDelta>
+```
+
+#### Step 5 — LocalStore (`packages/store/src/local/index.ts`)
+
+Implement `getContextDelta(projectId, branchId, since)`:
+- `newCommits = q.listCommitsSince(branchId, since)`
+- `threadChanges = q.listThreadChangesSince(projectId, since)`
+- `openedThreads` = changes where `status === 'open'` (createdAt > since)
+- `closedThreads` = changes where `status === 'closed'` (updatedAt > since)
+- `activeClaims = q.listActiveClaims(projectId)`
+- Return `{ newCommits, openedThreads, closedThreads, activeClaims, checkedAt: Date.now() }`
+
+#### Step 6 — RemoteStore + REST API
+
+`packages/store/src/remote/index.ts`:
+- Add `parseContextDelta(raw)` helper (parse Date fields in arrays of Commit/Thread/Claim)
+- Implement `getContextDelta`: `GET /projects/{id}/delta?branchId=&since=`
+
+`packages/api/src/store-router.ts`:
+```
+GET /projects/:id/delta?branchId=&since=  → store.getContextDelta(projectId, branchId, since)
+```
+
+#### Step 7 — MCP server (`packages/mcp/src/server.ts`)
+
+**a) Agent ID env override** (near line 90):
+```typescript
+const agentId = process.env.CONTEXTGIT_AGENT_ID ?? `${hostname}-mcp-claude-code-interactive`
+```
+
+**b) `context_get` — add `since` param:**
+```typescript
+since: z.number().optional().describe(
+  'Unix timestamp ms. When provided, returns only commits and thread changes ' +
+  'after this time. Use for orchestrator polling loops.'
+)
+```
+When `since` is set → call `ctx.store.getContextDelta(...)` and return JSON.
+When omitted → existing snapshot behaviour unchanged.
+
+**c) `context_claim` — add `for_agent_id` and `thread_id` params:**
+```typescript
+for_agent_id: z.string().optional().describe('Claim on behalf of this agent ID (pre-claiming by orchestrator).')
+thread_id: z.string().optional().describe('Direct thread ID link for this claim.')
+```
+Use `for_agent_id ?? agentId` as `ClaimInput.agentId`. Pass `thread_id` into `ClaimInput`.
+
+#### Step 8 — Snapshot formatter (`packages/core/src/snapshot.ts`)
+
+In `agents-md` and `text` formats, replace the Open Threads list with inline claim status:
+- For each thread: check `activeClaims` for a match (`claim.threadId === thread.id` preferred; case-insensitive substring of `thread.description` fallback)
+- If matched: prefix `[CLAIMED by {agentId}]`
+- If not: prefix `[FREE]`
+- Remove the separate `## Active Claims` section (claims now shown inline)
+- `json` format: unchanged
+
+New tests to add:
+- Extend `packages/store/src/local/claims.test.ts` — `getContextDelta` assertions
+- New `packages/core/src/snapshot.test.ts` — inline claim formatter
 
 ### Validation Criteria
 
