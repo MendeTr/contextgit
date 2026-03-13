@@ -1,6 +1,6 @@
 {
   "name": "@contextgit/store",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.0.3",
+    "@contextgit/core": "workspace:*",
     "better-sqlite3": "^9.4.0",
     "nanoid": "^5.0.0",
     "sqlite-vec": "^0.1.6"
