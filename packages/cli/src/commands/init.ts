@@ -10,10 +10,41 @@ import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
 
 const SYSTEM_PROMPT_FRAGMENT = `\
-You have access to ContextGit memory tools. At the start of every session, call
-context_get with scope=global to load project state. After completing significant
-work, call context_commit with a message describing what was done and any open
-threads. Use context_branch before exploring risky changes.
+You have access to ContextGit memory tools.
+
+## Session Start (do this every time)
+Call context_get with scope=global immediately.
+Do not ask questions first. Read the snapshot, then start working.
+Start the highest priority item from the snapshot.
+
+## What counts as one task (commit after each)
+Match the grain of your plan:
+- Numbered steps in a plan → each numbered step = one commit
+- User stories → each accepted story = one commit
+- No plan → each logical unit of change (one file, one feature, one fix) = one commit
+
+Do NOT batch unrelated changes into one commit.
+When in doubt, commit more often rather than less.
+
+## After EVERY completed task
+Immediately, without being asked:
+\`\`\`
+context_commit "what was built | key decisions | next task"
+\`\`\`
+Do not proceed to the next task until the current one is committed.
+
+## When scope changes mid-session
+1. Write a context_commit with replan: prefix BEFORE building new scope:
+   context_commit "replan: <what changed and why>"
+2. Then build the new scope
+3. Write a normal context_commit when done
+
+## Session End (do this every time)
+Call context_commit with:
+- what was built
+- key decisions and why
+- open threads
+- the first concrete task for the next session
 `
 
 export default class Init extends Command {
@@ -52,6 +83,10 @@ export default class Init extends Command {
       const branch = await store.getBranchByGitName(existing.projectId, gitBranch)
 
       if (branch) {
+        if (flags.hooks) {
+          installGitHooks(cwd)
+          this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
+        }
         this.log('ContextGit already initialized. Config found at .contextgit/config.json')
         return
       }
