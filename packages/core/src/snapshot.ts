@@ -1,7 +1,16 @@
 // SnapshotFormatter — converts a SessionSnapshot to one of the 3 output formats.
 // Moved from store/local/index.ts (inline) to core so all consumers share the same output.
 
-import type { SessionSnapshot, SnapshotFormat } from './types.js'
+import type { Claim, SessionSnapshot, SnapshotFormat, Thread } from './types.js'
+
+function claimLabel(thread: Thread, activeClaims: Claim[]): string {
+  const match = activeClaims.find(
+    (cl) =>
+      (cl.threadId && cl.threadId === thread.id) ||
+      cl.task.toLowerCase().includes(thread.description.toLowerCase().slice(0, 30)),
+  )
+  return match ? `[CLAIMED by ${match.agentId}]` : '[FREE]'
+}
 
 export class SnapshotFormatter {
   format(snapshot: SessionSnapshot, fmt: SnapshotFormat): string {
@@ -21,11 +30,8 @@ export class SnapshotFormatter {
       const threads = openThreads
         .map(
           (t) =>
-            `- [ ] ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
+            `- ${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
         )
-        .join('\n')
-      const claims = activeClaims
-        .map((cl) => `- [${cl.status}] ${cl.task}  by ${cl.agentId} (${cl.role})`)
         .join('\n')
       return [
         `## Project State`,
@@ -39,9 +45,6 @@ export class SnapshotFormatter {
         ``,
         `## Open Threads`,
         threads || '(none)',
-        ``,
-        `## Active Claims`,
-        claims || '(none)',
       ].join('\n')
     }
 
@@ -55,11 +58,8 @@ export class SnapshotFormatter {
     const threads = openThreads
       .map(
         (t) =>
-          `[ ] ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
+          `${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
       )
-      .join('\n')
-    const claims = activeClaims
-      .map((cl) => `[${cl.status}] ${cl.task}  by ${cl.agentId} (${cl.role})`)
       .join('\n')
 
     return [
@@ -74,9 +74,6 @@ export class SnapshotFormatter {
       ``,
       `=== OPEN THREADS ===`,
       threads || '(none)',
-      ``,
-      `=== ACTIVE CLAIMS ===`,
-      claims || '(none)',
     ].join('\n')
   }
 }
