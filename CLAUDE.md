@@ -45,7 +45,14 @@ git add .
 git commit -m ": "
 git push
 ```
+## When scope changes mid-session
+1. Write a context_commit with replan: prefix immediately:
+   context_commit "replan: <what changed and why. what is new scope. what is no longer in scope>"
+2. Then build the new scope
+3. Write a normal context_commit when done
 
+Do not build first and replan after. Replan commit must come first.
+Other agents are reading the snapshot in real time.
 ## Commit Convention
 - `feat:` new functionality
 - `feat(package):` scoped to a package e.g. `feat(core):`
