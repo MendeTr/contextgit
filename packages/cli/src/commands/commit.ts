@@ -1,6 +1,6 @@
 // commit — record a context commit via engine.commit().
 
-import { Command, Flags } from '@oclif/core'
+import { Args, Command, Flags } from '@oclif/core'
 import { simpleGit } from 'simple-git'
 import { bootstrap } from '../bootstrap.js'
 
@@ -15,11 +15,19 @@ async function captureGitSha(cwd: string): Promise<string | undefined> {
 export default class CommitCmd extends Command {
   static description = 'Record a context commit'
 
+  // Positional arg — mirrors git commit behaviour: contextgit commit "message"
+  static args = {
+    message: Args.string({
+      description: 'Short commit message (what was accomplished)',
+      required: false,
+    }),
+  }
+
   static flags = {
     message: Flags.string({
       char: 'm',
-      description: 'Short commit message (what was accomplished)',
-      required: true,
+      description: 'Short commit message — alternative to positional arg',
+      required: false,
     }),
     content: Flags.string({
       char: 'c',
@@ -50,7 +58,14 @@ export default class CommitCmd extends Command {
   }
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(CommitCmd)
+    const { args, flags } = await this.parse(CommitCmd)
+
+    // Positional arg takes precedence; -m flag is the fallback for scripts/hooks
+    const message = args.message ?? flags.message
+    if (!message) {
+      this.error('A commit message is required. Usage: contextgit commit "your message" or contextgit commit -m "your message"')
+    }
+
     const ctx = await bootstrap()
 
     const threads: {
@@ -64,8 +79,8 @@ export default class CommitCmd extends Command {
 
     const gitCommitSha = await captureGitSha(process.cwd())
     const commit = await ctx.engine.commit({
-      message: flags.message,
-      content: flags.content ?? flags.message,
+      message,
+      content: flags.content ?? message,
       gitCommitSha,
       ciRunId: flags['ci-run-id'],
       pipelineName: flags.pipeline,
