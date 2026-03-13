@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.0.4",
-    "@contextgit/store": "0.0.4",
+    "@contextgit/core": "workspace:*",
+    "@contextgit/store": "workspace:*",
     "express": "^4.19.0",
     "simple-git": "^3.27.0"
   },
