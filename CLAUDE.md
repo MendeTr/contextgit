@@ -11,8 +11,6 @@ GitHub: https://github.com/MendeTr/contextgit
 Branch: main
 Clone: git clone https://github.com/MendeTr/contextgit
 
-
-
 ## Session Start (do this every time)
 Call context_get with scope=global immediately.
 Do not read decisions.md. Do not ask questions first.
@@ -20,15 +18,33 @@ Read the snapshot. Then start working.
 Do not ask what to work on. Start the highest priority item from the snapshot.
 If unclear, follow the Phase 2 plan: docs/ContextGit_PHASE2_PLAN.md
 
+## What counts as a completed task (commit after EACH of these)
+- One file edited with a schema/DDL change
+- One migration added
+- One type added or modified
+- One query or store method added
+- One interface method added
+- One MCP tool parameter added
+- One formatter change
+- Any test file added or passing
+
+Do NOT batch multiple steps into one commit. One step = one commit.
+If you are working from a numbered plan, each numbered step = one commit.
 
 ## After EVERY completed task
+```bash
+pnpm build
 git add .
 git commit -m "feat/fix: <what was done>"
 git push
+```
+Then immediately:
+```
 context_commit "what was built | key decisions | next task"
+```
 
 Do not wait to be asked. Every completed task = immediate commit.
-This applies to bug fixes, feature additions, and refactors alike.
+Do not proceed to the next step until the current step is committed.
 
 ## Session End (do this every time)
 Call context_commit with:
@@ -36,23 +52,23 @@ Call context_commit with:
 - key decisions and why
 - open threads
 - the first concrete task for the next session
-Then: git add . && git commit -m "..." && git push
-```
 
-Then commit everything:
+Then:
 ```bash
 git add .
-git commit -m ": "
+git commit -m "<type>: <summary>"
 git push
 ```
+
 ## When scope changes mid-session
 1. Write a context_commit with replan: prefix immediately:
-   context_commit "replan: <what changed and why. what is new scope. what is no longer in scope>"
+   `context_commit "replan: <what changed and why. what is new scope. what is no longer in scope>"`
 2. Then build the new scope
 3. Write a normal context_commit when done
 
 Do not build first and replan after. Replan commit must come first.
 Other agents are reading the snapshot in real time.
+
 ## Commit Convention
 - `feat:` new functionality
 - `feat(package):` scoped to a package e.g. `feat(core):`
@@ -113,6 +129,7 @@ api → core, store, express
 `Project → Branch → Commit` core hierarchy.
 `Thread` tracks open questions scoped to a project.
 `Agent` records active agents per project.
+`Claim` tracks active task claims per agent per branch.
 All types in `packages/core/src/types.ts`.
 
 ## TypeScript
@@ -125,6 +142,7 @@ Root vitest config collects `packages/*/src/**/*.test.ts`.
 
 ## Key Docs
 - `docs/decisions.md` — session history (read this first)
-- `docs/ContextGit_PHASE1_PLAN.md` — current build plan
+- `docs/ContextGit_PHASE2_PLAN.md` — current build plan
+- `docs/ContextGit_DELTA_multiagent.md` — active delta spec (build this next)
 - `docs/ContextGit_ARCHITECTURE_v3.md` — full architecture
 - `docs/ContextGit_PRD_v4.md` — product requirements
