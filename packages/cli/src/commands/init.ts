@@ -2,6 +2,7 @@
 
 import { Command, Flags } from '@oclif/core'
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs'
+import { createInterface } from 'readline'
 import { join, basename } from 'path'
 import { nanoid } from 'nanoid'
 import { simpleGit } from 'simple-git'
@@ -59,15 +60,18 @@ export default class Init extends Command {
     hooks: Flags.boolean({
       description: 'Install git hooks to auto-capture context on every git commit',
       default: false,
+      allowNo: true,   // --no-hooks to explicitly skip and suppress prompt
     }),
   }
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(Init)
+    const { flags, argv } = await this.parse(Init)
     const cwd = process.cwd()
     const configDir  = join(cwd, '.contextgit')
     const configPath = join(configDir, 'config.json')
     const promptPath = join(configDir, 'system-prompt.md')
+    // True if the user explicitly passed --hooks or --no-hooks
+    const hooksExplicit = argv.some(a => String(a).startsWith('--hooks') || String(a) === '--no-hooks')
 
     // ── Self-heal: config exists but DB may be empty ───────────────────────────
     if (existsSync(configPath)) {
@@ -83,6 +87,7 @@ export default class Init extends Command {
       const branch = await store.getBranchByGitName(existing.projectId, gitBranch)
 
       if (branch) {
+        // BUG-2 fix: --hooks on already-initialized project always installs
         if (flags.hooks) {
           installGitHooks(cwd)
           this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
@@ -102,7 +107,6 @@ export default class Init extends Command {
       writeSystemPrompt(promptPath)
       this.log(`Recreated project "${existing.project}" (${existing.projectId}) for branch: ${gitBranch}`)
       this.log(`System prompt: .contextgit/system-prompt.md`)
-      this.log(SYSTEM_PROMPT_FRAGMENT)
       if (flags.hooks) {
         installGitHooks(cwd)
         this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
@@ -114,19 +118,16 @@ export default class Init extends Command {
     const projectName = flags.name ?? basename(cwd)
     const projectId = nanoid()
 
-    // Open store (creates DB + runs migrations).
     const store = new LocalStore(projectId)
     await store.createProject({ id: projectId, name: projectName })
 
     const gitBranch = await detectGitBranch(cwd)
-
     await store.createBranch({
       projectId,
       name: `Context: ${gitBranch}`,
       gitBranch,
     })
 
-    // Write config
     mkdirSync(configDir, { recursive: true })
     const config: ContextGitConfig = {
       project: projectName,
@@ -147,14 +148,25 @@ export default class Init extends Command {
     this.log(`Config:      .contextgit/config.json`)
     this.log(`DB:          ~/.contextgit/projects/${projectId}.db`)
     this.log(``)
-    if (flags.hooks) {
+
+    // BUG-3 fix: prompt for hooks unless user was explicit about it
+    let installHooks = flags.hooks
+    if (!hooksExplicit) {
+      installHooks = await promptYesNo(
+        'Install git hooks to auto-capture context on every git commit? (Y/n) '
+      )
+    }
+
+    if (installHooks) {
       installGitHooks(cwd)
       this.log(`Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)`)
     } else {
-      this.log(`Tip: run "contextgit init --hooks" to auto-capture context on every git commit`)
+      this.log(`Skipped hooks. Run "contextgit init --hooks" anytime to install them.`)
     }
+
     this.log(``)
-    this.log(`Add the following to your MCP system prompt (.contextgit/system-prompt.md):`)
+    this.log(`System prompt written to .contextgit/system-prompt.md`)
+    this.log(`Add its contents to your Claude Code MCP config to enable ContextGit.`)
     this.log(``)
     this.log(SYSTEM_PROMPT_FRAGMENT)
   }
@@ -173,4 +185,20 @@ async function detectGitBranch(cwd: string): Promise<string> {
 
 function writeSystemPrompt(promptPath: string): void {
   writeFileSync(promptPath, SYSTEM_PROMPT_FRAGMENT)
+}
+
+/** Prompt the user with a yes/no question. Defaults to yes on empty input. */
+function promptYesNo(question: string): Promise<boolean> {
+  return new Promise(resolve => {
+    // Non-interactive environment (CI, piped stdin) — default to yes
+    if (!process.stdin.isTTY) {
+      resolve(true)
+      return
+    }
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    rl.question(question, answer => {
+      rl.close()
+      resolve(answer.trim().toLowerCase() !== 'n')
+    })
+  })
 }
