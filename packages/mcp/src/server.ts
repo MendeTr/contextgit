@@ -66,6 +66,7 @@ interface ServerContext {
   projectId: string
   branchId: string
   config: ContextGitConfig
+  agentId: string
 }
 
 async function bootstrap(): Promise<ServerContext> {
@@ -87,7 +88,7 @@ async function bootstrap(): Promise<ServerContext> {
   const branchId = await resolveContextBranch(store, projectId, gitBranch)
 
   const hostname = os.hostname()
-  const agentId = `${hostname}-mcp-claude-code-interactive`
+  const agentId = process.env['CONTEXTGIT_AGENT_ID'] ?? `${hostname}-mcp-claude-code-interactive`
 
   const engine = new ContextEngine(
     store,
@@ -99,7 +100,7 @@ async function bootstrap(): Promise<ServerContext> {
   )
   await engine.init(projectId, branchId)
 
-  return { engine, store, projectId, branchId, config }
+  return { engine, store, projectId, branchId, config, agentId }
 }
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
@@ -129,10 +130,19 @@ export async function createServer(): Promise<McpServer> {
       agent_role: z.enum(['orchestrator','dev','test','review','background','ci','solo']).optional().describe(
         'Filter recentCommits to this agent role only. Omit to return commits from all roles.',
       ),
+      since: z.number().optional().describe(
+        'Unix timestamp ms. When provided, returns only commits and thread changes after this time. Use for orchestrator polling loops.',
+      ),
     },
-    async ({ format, agent_role }) => {
+    async ({ format, agent_role, since }) => {
       await autoSnapshot.onToolCall('context_get')
       try {
+        if (since !== undefined) {
+          const delta = await ctx.store.getContextDelta(ctx.projectId, ctx.branchId, since)
+          return {
+            content: [{ type: 'text', text: JSON.stringify(delta, null, 2) }],
+          }
+        }
         const snapshot = await ctx.store.getSessionSnapshot(
           ctx.projectId,
           ctx.branchId,
@@ -291,16 +301,19 @@ export async function createServer(): Promise<McpServer> {
       task: z.string().min(1).describe('Short description of the task being claimed (e.g. "build auth module").'),
       ttl_hours: z.number().positive().default(2).describe('Time-to-live in hours before the claim auto-expires. Default: 2.'),
       status: z.enum(['proposed', 'active']).default('proposed').describe("'proposed' for plan-mode claims; 'active' once approved and work begins."),
+      for_agent_id: z.string().optional().describe('Claim on behalf of this agent ID (pre-claiming by orchestrator).'),
+      thread_id: z.string().optional().describe('Direct thread ID link for this claim.'),
     },
-    async ({ task, ttl_hours, status }) => {
+    async ({ task, ttl_hours, status, for_agent_id, thread_id }) => {
       await autoSnapshot.onToolCall('context_claim')
       try {
         const claim = await ctx.store.claimTask(ctx.projectId, ctx.branchId, {
           task,
-          agentId: `${os.hostname()}-mcp-claude-code-interactive`,
+          agentId: for_agent_id ?? ctx.agentId,
           role: ctx.config.agentRole ?? 'solo',
           status,
           ttl: Math.round(ttl_hours * 3_600_000),
+          threadId: thread_id,
         })
         return {
           content: [
