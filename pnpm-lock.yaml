@@ -21,11 +21,11 @@ importers:
   packages/api:
     dependencies:
       '@contextgit/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.0.4
+        version: 0.0.4
       '@contextgit/store':
-        specifier: workspace:*
-        version: link:../store
+        specifier: 0.0.4
+        version: 0.0.4
       express:
         specifier: ^4.19.0
         version: 4.22.1
@@ -46,14 +46,14 @@ importers:
   packages/cli:
     dependencies:
       '@contextgit/api':
-        specifier: workspace:*
-        version: link:../api
+        specifier: 0.0.3
+        version: 0.0.3
       '@contextgit/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.0.3
+        version: 0.0.3
       '@contextgit/store':
-        specifier: workspace:*
-        version: link:../store
+        specifier: 0.0.3
+        version: 0.0.3
       '@oclif/core':
         specifier: ^3.27.0
         version: 3.27.0
@@ -121,8 +121,8 @@ importers:
   packages/store:
     dependencies:
       '@contextgit/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.0.3
+        version: 0.0.3
       better-sqlite3:
         specifier: ^9.4.0
         version: 9.6.0
@@ -150,6 +150,21 @@ packages:
 
   '@anthropic-ai/sdk@0.40.1':
     resolution: {integrity: sha512-DJMWm8lTEM9Lk/MSFL+V+ugF7jKOn0M2Ujvb5fN8r2nY14aHbGPZ1k6sgjL+tpJ3VuOGJNG+4R83jEpOuYPv8w==}
+
+  '@contextgit/api@0.0.3':
+    resolution: {integrity: sha512-aoJVjN0ACO56sPWzecJiqChq0F6aagKD+7J3wHelJ2828S2hY/kuwauB9t+1RyEvHa3n4mRcaWknXWTk+/uLnQ==}
+
+  '@contextgit/core@0.0.3':
+    resolution: {integrity: sha512-ydoYqXLxe49rnbKPOhw3usA4o8ZkEV71cnXW7+v86OzYUJ3JjPL5uU+PeQ9W4xDQZTQzbwNVhkmoV2D4fSRv3w==}
+
+  '@contextgit/core@0.0.4':
+    resolution: {integrity: sha512-hqbUiAqxz0BXrJpGB5jtIBgc1zZQScQ4hsabewbGdqXuUlA7pzk/5v45lpV0rmlZE9Yu7p67wpF9Ohyv+87Y9A==}
+
+  '@contextgit/store@0.0.3':
+    resolution: {integrity: sha512-kNU2ex+ZJ6lHd8VWrpRehuONHdchEEvZBtTZ2hD606P3xXponfs4TkO9PZ+imq6Qy+jN91FQgfbVY5PLT4jZXw==}
+
+  '@contextgit/store@0.0.4':
+    resolution: {integrity: sha512-JAB9GAxh27gFeGZO3SdlXLSzZ8EfConUAwZTr24X1IZjW+qCbb0jDyuAeLXZJ+rB7ZZvjqeC/Pgn99TBN09nzw==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -1898,6 +1913,65 @@ snapshots:
       node-fetch: 2.7.0
     transitivePeerDependencies:
       - encoding
+
+  '@contextgit/api@0.0.3':
+    dependencies:
+      '@contextgit/core': 0.0.3
+      '@contextgit/store': 0.0.3
+      express: 4.22.1
+      simple-git: 3.32.3
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+      - supports-color
+
+  '@contextgit/core@0.0.3':
+    dependencies:
+      '@anthropic-ai/sdk': 0.40.1
+      '@xenova/transformers': 2.17.2
+      nanoid: 5.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+
+  '@contextgit/core@0.0.4':
+    dependencies:
+      '@anthropic-ai/sdk': 0.40.1
+      '@xenova/transformers': 2.17.2
+      nanoid: 5.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+
+  '@contextgit/store@0.0.3':
+    dependencies:
+      '@contextgit/core': 0.0.3
+      better-sqlite3: 9.6.0
+      nanoid: 5.1.6
+      sqlite-vec: 0.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+
+  '@contextgit/store@0.0.4':
+    dependencies:
+      '@contextgit/core': 0.0.3
+      better-sqlite3: 9.6.0
+      nanoid: 5.1.6
+      sqlite-vec: 0.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
