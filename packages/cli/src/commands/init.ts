@@ -9,6 +9,7 @@ import { simpleGit } from 'simple-git'
 import { LocalStore } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
+import { detectClients, injectMcpServer } from '../lib/client-config.js'
 
 const MCP_SYSTEM_PROMPT = `You have access to ContextGit memory tools.
 
@@ -174,9 +175,55 @@ export default class Init extends Command {
 
     this.log(``)
     this.log(`System prompt written to .contextgit/system-prompt.md`)
-    this.log(`Add its contents to your Claude Code MCP config to enable ContextGit.`)
     this.log(``)
-    this.log(SYSTEM_PROMPT_FRAGMENT)
+
+    // ── Auto-configure MCP clients ─────────────────────────────────────────────
+    try {
+      const clients = detectClients()
+      if (clients.length === 0) {
+        this.log(`⚠️  No MCP clients detected.`)
+        this.log(``)
+        this.log(`Add the following to your MCP client config manually:`)
+        this.log(``)
+        this.log(`  "contextgit": {`)
+        this.log(`    "command": "npx",`)
+        this.log(`    "args": ["contextgit", "mcp"],`)
+        this.log(`    "systemPrompt": "${MCP_SYSTEM_PROMPT.replace(/\n/g, '\\n')}"`)
+        this.log(`  }`)
+        this.log(``)
+        this.log(`Searched:`)
+        this.log(`  ~/.claude.json`)
+        this.log(`  ~/.cursor/mcp.json`)
+        this.log(`  ~/Library/Application Support/Claude/claude_desktop_config.json`)
+      } else {
+        let anyInjected = false
+        for (const client of clients) {
+          const result = injectMcpServer(client.path, client.type, MCP_SYSTEM_PROMPT)
+          const label = clientLabel(client.type).padEnd(14)
+          const shortPath = client.path.replace(process.env['HOME'] ?? '', '~')
+          if (result.status === 'injected') {
+            this.log(`✅ Configured ${label} (${shortPath})`)
+            anyInjected = true
+          } else if (result.status === 'already-present') {
+            this.log(`⏭  ${label} already configured (skipped)`)
+          } else if (result.status === 'error') {
+            this.log(`❌ ${label} config error: ${result.reason}`)
+            this.log(`   Path: ${shortPath}`)
+            this.log(`   Fix manually or re-run after repairing the file.`)
+          } else {
+            this.log(`⏭  ${label} not found (skipped)`)
+          }
+        }
+        if (anyInjected) {
+          this.log(``)
+          this.log(`ContextGit is ready. Open Claude Code in this project and start a session.`)
+          this.log(`The agent will call context_get automatically on every session start.`)
+        }
+      }
+    } catch (err) {
+      this.log(`⚠️  Could not auto-configure MCP clients: ${String(err)}`)
+      this.log(`Add the MCP server entry manually — see .contextgit/system-prompt.md`)
+    }
   }
 }
 
@@ -193,6 +240,13 @@ async function detectGitBranch(cwd: string): Promise<string> {
 
 function writeSystemPrompt(promptPath: string): void {
   writeFileSync(promptPath, SYSTEM_PROMPT_FRAGMENT)
+}
+
+function clientLabel(type: string): string {
+  if (type === 'claude-code') return 'Claude Code'
+  if (type === 'cursor') return 'Cursor'
+  if (type === 'claude-desktop') return 'Claude Desktop'
+  return type
 }
 
 /** Prompt the user with a yes/no question. Defaults to yes on empty input. */
