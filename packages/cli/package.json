@@ -19,9 +19,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "workspace:*",
-    "@contextgit/store": "workspace:*",
-    "@contextgit/api": "workspace:*",
+    "@contextgit/core": "0.0.5",
+    "@contextgit/store": "0.0.5",
+    "@contextgit/api": "0.0.5",
     "@oclif/core": "^3.27.0",
     "nanoid": "^5.0.0",
     "simple-git": "^3.27.0"
