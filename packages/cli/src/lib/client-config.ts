@@ -16,7 +16,7 @@ export interface InjectionResult {
 
 const MCP_ENTRY = {
   command: 'npx',
-  args: ['contextgit-mcp'],
+  args: ['-y', '@contextgit/mcp'],
 }
 
 /** Resolve known config paths for each client type. */
