@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "workspace:*",
+    "@contextgit/core": "0.0.7",
     "better-sqlite3": "^9.4.0",
     "nanoid": "^5.0.0",
     "sqlite-vec": "^0.1.6"
