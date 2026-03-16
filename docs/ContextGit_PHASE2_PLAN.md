@@ -633,6 +633,49 @@ New tests to add:
 
 ---
 
+## Phase 2 Delta 3 — Zero-Config Init (added 2026-03-16)
+
+**Status: READY TO BUILD — targets v0.0.5.**
+
+`contextgit init` currently prints the MCP server entry and system prompt and tells the user to paste them manually into their MCP client config. This is the primary drop-off point for new users. This delta makes init auto-detect and auto-configure installed MCP clients.
+
+See `docs/ContextGit_DELTA_zero_config_init.md` for full spec.
+
+### Scope
+
+- Auto-detect Claude Code (`~/.claude.json`), Cursor (`~/.cursor/mcp.json`), Claude Desktop (platform path)
+- Inject MCP server entry + system prompt fragment into each detected client config
+- Surgical JSON merge — never overwrite; idempotent
+- Fallback to manual instructions if no clients detected
+- Atomic write (temp file + rename) to prevent config corruption
+
+### New file: `packages/cli/src/lib/client-config.ts`
+
+Exports:
+- `detectClients(homedir?: string): DetectedClient[]`
+- `injectMcpServer(clientPath: string, clientType: ClientType, mcpEntry: object): InjectionResult`
+- `isAlreadyInjected(config: object): boolean`
+
+### New file: `packages/cli/src/lib/client-config.test.ts`
+
+8 tests covering: empty detection, per-client detection, JSON merge, idempotency, invalid JSON guard, atomic write.
+
+### Changes to `packages/cli/src/commands/init.ts`
+
+- Add `MCP_SYSTEM_PROMPT` constant (concise version for client injection — distinct from existing `SYSTEM_PROMPT_FRAGMENT` written to `.contextgit/system-prompt.md`)
+- After hooks step: call `detectClients()` + `injectMcpServer()` per detected client
+- Replace manual-paste log lines with emoji summary output
+- Entire client config block in try/catch — never blocks init
+
+### Validation Gate
+
+1. `contextgit init` on machine with `~/.claude.json` → contextgit entry appears with correct `systemPrompt`
+2. Run again → `already-present` output (idempotent)
+3. Run with no MCP clients → fallback manual instructions printed
+4. Open Claude Code → agent calls `context_get` without being asked
+
+---
+
 ## Known CLI Bugs (to fix before 0.0.4 publish)
 
 1. **`contextgit commit "message"` — positional arg not supported**
