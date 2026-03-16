@@ -10,6 +10,14 @@ import { LocalStore } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
 
+const MCP_SYSTEM_PROMPT = `You have access to ContextGit memory tools.
+
+At the start of every session, call context_get with scope=global immediately — before reading any files, before asking any questions, before doing any work. Do not skip this step.
+
+After completing significant work (a feature, a decision, a resolved problem), call context_commit with a message describing what was done, what was decided, and any open questions. Include the current git branch and commit hash at the top of the message.
+
+If you are about to explore a risky or experimental approach, call context_branch first to create an isolated context workspace.`
+
 const SYSTEM_PROMPT_FRAGMENT = `\
 You have access to ContextGit memory tools.
 
