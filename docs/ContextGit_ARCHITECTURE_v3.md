@@ -940,38 +940,61 @@ Generates `.contextgit/config.json`:
 }
 ```
 
-**MCP Tools exposed to agent:**
+**MCP Tools exposed to agent** *(current — Delta 3, v0.0.10+)*:
 
-- `context_get` — session start snapshot. Optional `agent_role` filter. Optional `since` timestamp for orchestrator polling.
-- `context_commit` — checkpoint with message, content, threads. Auto-releases active claims on commit.
-- `context_branch` — create a context branch
-- `context_merge` — merge a context branch
-- `context_claim` — claim a task before starting. Optional `for_agent_id` for orchestrator pre-claiming. Optional `thread_id` for direct thread linkage.
-- `context_unclaim` — release a claim manually
+- `project_memory_load` — session start snapshot. Optional `agent_role` filter. Optional `since` timestamp for orchestrator polling.
+- `project_memory_save` — checkpoint with message, content, threads. Auto-releases active claims on commit.
+- `project_memory_branch` — create a context branch before risky/experimental work
+- `project_memory_merge` — merge a context branch back into parent
+- `project_task_claim` — claim a task before starting. Optional `for_agent_id` for orchestrator pre-claiming. Optional `thread_id` for direct thread linkage.
+- `project_task_unclaim` — release a claim manually
+- `context_search` — semantic + full-text search over past commits (name unchanged)
+
+> **⚠️ SUPERSEDED (v0.0.9 and earlier):** Old tool names below are still registered as backward-compat aliases (emit deprecation warning). Will be removed in v0.0.6.
+>
+> - ~~`context_get`~~ → use `project_memory_load`
+> - ~~`context_commit`~~ → use `project_memory_save`
+> - ~~`context_branch`~~ → use `project_memory_branch`
+> - ~~`context_merge`~~ → use `project_memory_merge`
+> - ~~`context_claim`~~ → use `project_task_claim`
+> - ~~`context_unclaim`~~ → use `project_task_unclaim`
 
 **Background snapshotting:** MCP server counts tool calls and auto-commits every N calls (default 10). Tagged `commit_type: auto`, displayed differently in the web UI, can be promoted to manual.
 
-**System prompt fragment** injected by `contextgit init`:
+**Session enforcement — three-layer model** *(Delta 3, replaces single system prompt fragment)*:
 
-```
-You have access to a persistent context system. Use it consistently.
+| Layer | Mechanism | Reaches |
+|---|---|---|
+| 1 (universal) | MCP tool descriptions — self-enforcing, IMPORTANT-prefixed | All agents including subagents |
+| 2 (interactive) | `CLAUDE.md` fragment written by `contextgit init` | Interactive sessions, project-aware agents |
+| 3 (interactive) | Project skills in `.claude/skills/` written by `contextgit init` | Interactive Claude Code sessions |
 
-ALWAYS at session start: call context_get scope="global". This returns a compact
-snapshot (~500 tokens) of project state, branch, recent commits, and open threads.
-Read it before doing anything else.
+`contextgit init` writes:
+- `CLAUDE.md` fragment (idempotent via `<!-- contextgit:start -->` sentinel)
+- `.claude/skills/context-commit/SKILL.md` — guides `project_memory_save` discipline
+- `.claude/skills/context-branch/SKILL.md` — guides `project_memory_branch` discipline
 
-BEFORE starting any task: call context_claim to claim it. This prevents other agents
-from starting the same work simultaneously. Claims auto-release on context_commit.
-
-DURING work, call context_commit when you: complete a feature or fix, make an
-architectural decision, discover a failed approach, open or close a thread.
-
-WHEN exploring uncertain approaches: context_branch first. Abandon or merge.
-
-FOR specific past decisions: context_get scope=search. Do not load raw history.
-
-The snapshot is NOT the PRD. It is distilled reality. Treat it as ground truth.
-```
+> **⚠️ SUPERSEDED (v0.0.9 and earlier):** Single system prompt fragment approach below. Replaced by three-layer model above. Still written to `.contextgit/system-prompt.md` for reference.
+>
+> ```
+> You have access to a persistent context system. Use it consistently.
+>
+> ALWAYS at session start: call context_get scope="global". This returns a compact
+> snapshot (~500 tokens) of project state, branch, recent commits, and open threads.
+> Read it before doing anything else.
+>
+> BEFORE starting any task: call context_claim to claim it. This prevents other agents
+> from starting the same work simultaneously. Claims auto-release on context_commit.
+>
+> DURING work, call context_commit when you: complete a feature or fix, make an
+> architectural decision, discover a failed approach, open or close a thread.
+>
+> WHEN exploring uncertain approaches: context_branch first. Abandon or merge.
+>
+> FOR specific past decisions: context_get scope=search. Do not load raw history.
+>
+> The snapshot is NOT the PRD. It is distilled reality. Treat it as ground truth.
+> ```
 
 ### 9.2 CLI
 
