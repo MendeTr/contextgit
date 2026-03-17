@@ -14,20 +14,48 @@ export const CLAUDE_MD_FRAGMENT = `
 
 This project uses ContextGit for persistent AI memory across sessions.
 
-**Session start:** Call \`project_memory_load\` (or \`context_get\`) immediately — before reading files, before asking questions, before doing any work. This loads the full project state: what was built, what was decided, active tasks, and open questions.
+## Session Start (do this every time)
 
-**After significant work:** Call \`project_memory_save\` (or \`context_commit\`) with a structured message:
+Call \`project_memory_load\` immediately.
+Do not ask questions first. Read the snapshot, then start working.
+Start the highest priority item from the snapshot.
+
+## After EVERY completed task
+
+Do not wait to be asked. Every completed task = immediate context commit.
+Do not proceed to the next task until the current one is committed.
+
+Call \`project_memory_save\` with:
 - One-line summary of what was done
 - What was decided and why
 - What was built (files changed, approach taken)
 - Open questions
 - Git branch and commit hash
+- The next concrete task
 
-**Before risky exploration:** Call \`project_memory_branch\` (or \`context_branch\`) to create an isolated context workspace.
+## Session End (do this every time)
 
-**Before starting a task:** Call \`project_task_claim\` (or \`context_claim\`) to prevent other agents from duplicating your work.
+Before stopping work for any reason, call \`project_memory_save\` with:
+- What was built this session
+- Key decisions and why
+- Open threads and blockers
+- The first concrete task for the next session
 
-Do not skip these steps. The next session starts blind without them.
+Do not end a session without a context commit. The next session starts blind without it.
+
+## Before risky exploration
+
+Call \`project_memory_branch\` to create an isolated context workspace before trying anything uncertain.
+
+## Before starting a task (multi-agent)
+
+Call \`project_task_claim\` to prevent other agents from duplicating your work.
+
+## When scope changes mid-session
+
+Write a \`project_memory_save\` with replan: prefix BEFORE building new scope:
+\`project_memory_save "replan: <what changed and why>"\`
+Then build the new scope. Then write a normal context commit when done.
 <!-- contextgit:end -->
 `
 
@@ -60,10 +88,16 @@ export function writeClaude(
 
 export const CONTEXT_COMMIT_SKILL = `---
 name: context-commit
-description: "Save project memory after completing work. Use this skill whenever you have just finished implementing a feature, resolved a bug or blocker, made an architectural decision, closed a thread, completed a code review, or are about to end the session. Also trigger when you see signals like 'that's working', 'task complete', 'let's move on', 'I'm done', or after completing a git commit. IMPORTANT: Always use this skill before ending a session or moving to the next task — skipping it means the next session starts blind."
+description: "MANDATORY: Save project memory after completing ANY work. Use this skill after EVERY completed task — finished implementing a feature, resolved a bug, made a decision, closed a thread, completed a review, or ending a session. Do not wait to be asked. Do not proceed to the next task until context is committed. Triggers: task complete, git commit made, 'that's working', 'let's move on', 'I'm done', session ending. Skipping this means the next session starts completely blind."
 ---
 
 # ContextGit — Context Commit Discipline
+
+## RULE: Every completed task = immediate context commit
+
+Do not wait to be asked. Do not batch. Do not skip.
+After every completed task, call \`project_memory_save\` immediately.
+Do not proceed to the next task until the current one is committed.
 
 ## When to commit context
 
@@ -72,7 +106,8 @@ Call \`project_memory_save\` (MCP tool) after:
 - Making an architectural decision or choosing between options
 - Resolving a bug, blocker, or open question
 - Closing a thread
-- Before ending the session
+- Making a git commit
+- Before ending the session for any reason
 
 ## What makes a good commit message
 
@@ -85,18 +120,8 @@ Structure:
 What was decided: <the decision and why>
 What was built: <files changed, approach taken>
 Open questions: <anything unresolved>
+Next task: <the first concrete thing the next session should do>
 Git: <branch> | <commit hash if available>
-\`\`\`
-
-Example:
-\`\`\`
-Implemented optimistic locking via CAS on branches table
-
-What was decided: CAS with 3-attempt retry + jitter over queue-based serialization.
-Queue deferred until high-conflict multi-agent scale. COMMIT_CONFLICT error type added.
-What was built: store/src/local/queries.ts (version column), store/src/local/index.ts (retry logic), core/src/types.ts (COMMIT_CONFLICT)
-Open questions: TTL behavior under high contention not yet load-tested.
-Git: feat/phase2-delta1 | a3f9c12
 \`\`\`
 
 ## How to call it
