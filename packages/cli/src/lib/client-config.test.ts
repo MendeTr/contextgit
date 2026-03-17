@@ -42,7 +42,7 @@ it('injectMcpServer writes correct JSON to a new empty config file', () => {
   expect(servers).toBeDefined()
   const entry = servers['contextgit'] as Record<string, unknown>
   expect(entry['command']).toBe('npx')
-  expect(entry['args']).toEqual(['contextgit', 'mcp'])
+  expect(entry['args']).toEqual(['-y', '@contextgit/mcp'])
   expect(entry['systemPrompt']).toBe(SYSTEM_PROMPT)
 })
 
@@ -66,7 +66,7 @@ it('injectMcpServer merges without touching other keys', () => {
 it('injectMcpServer returns already-present if contextgit exists', () => {
   const configPath = join(tmpDir, '.claude.json')
   writeFileSync(configPath, JSON.stringify({
-    mcpServers: { contextgit: { command: 'npx', args: ['contextgit', 'mcp'] } },
+    mcpServers: { contextgit: { command: 'npx', args: ['-y', '@contextgit/mcp'] } },
   }))
   const result = injectMcpServer(configPath, 'claude-code', SYSTEM_PROMPT)
   expect(result.status).toBe('already-present')
