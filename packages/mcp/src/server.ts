@@ -481,7 +481,9 @@ If you skip claiming, another agent may start the same task, producing duplicate
 
   server.tool(
     'project_task_unclaim',
-    'Release a previously claimed task so other agents can work on it.',
+    `Release a previously claimed task so other agents can work on it.
+
+Call when: abandoning a task you claimed (won't be completing it), or when re-assigning work. If you claimed a task and won't complete it, release it — otherwise it blocks other agents until the 2-hour TTL expires.`,
     projectTaskUnclaimSchema,
     handleProjectTaskUnclaim,
   )
