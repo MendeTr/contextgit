@@ -10,6 +10,7 @@ import { LocalStore } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
 import { detectClients, injectMcpServer } from '../lib/client-config.js'
+import { writeClaude, writeSkills } from '../lib/init-helpers.js'
 
 const MCP_SYSTEM_PROMPT = `You have access to ContextGit memory tools.
 
@@ -174,55 +175,51 @@ export default class Init extends Command {
     }
 
     this.log(``)
-    this.log(`System prompt written to .contextgit/system-prompt.md`)
-    this.log(``)
+
+    // ── Write CLAUDE.md fragment ───────────────────────────────────────────────
+    const claudeResult = writeClaude(cwd)
+    if (claudeResult.status === 'written') {
+      this.log(`✅ CLAUDE.md updated            (contextgit memory section appended)`)
+    } else if (claudeResult.status === 'already-present') {
+      this.log(`⏭  CLAUDE.md already configured (skipped)`)
+    } else {
+      this.log(`⚠️  CLAUDE.md not updated        (${claudeResult.reason})`)
+    }
+
+    // ── Write project-level skills ─────────────────────────────────────────────
+    const skillsResult = writeSkills(cwd)
+    if (skillsResult.status === 'written') {
+      this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
+      this.log(``)
+      this.log(`ContextGit is ready. Start a Claude Code session in this project.`)
+      this.log(`The agent will load project memory automatically via MCP tool discovery.`)
+    } else {
+      this.log(`⚠️  Skills not installed        (could not write to .claude/skills/ — create manually)`)
+      this.log(``)
+      this.log(`ContextGit is ready. MCP tools and CLAUDE.md are configured.`)
+      this.log(`For full skill support, create .claude/skills/ manually.`)
+    }
 
     // ── Auto-configure MCP clients ─────────────────────────────────────────────
     try {
       const clients = detectClients()
-      if (clients.length === 0) {
-        this.log(`⚠️  No MCP clients detected.`)
+      if (clients.length > 0) {
         this.log(``)
-        this.log(`Add the following to your MCP client config manually:`)
-        this.log(``)
-        this.log(`  "contextgit": {`)
-        this.log(`    "command": "npx",`)
-        this.log(`    "args": ["contextgit", "mcp"],`)
-        this.log(`    "systemPrompt": "${MCP_SYSTEM_PROMPT.replace(/\n/g, '\\n')}"`)
-        this.log(`  }`)
-        this.log(``)
-        this.log(`Searched:`)
-        this.log(`  ~/.claude.json`)
-        this.log(`  ~/.cursor/mcp.json`)
-        this.log(`  ~/Library/Application Support/Claude/claude_desktop_config.json`)
-      } else {
-        let anyInjected = false
         for (const client of clients) {
           const result = injectMcpServer(client.path, client.type, MCP_SYSTEM_PROMPT)
           const label = clientLabel(client.type).padEnd(14)
           const shortPath = client.path.replace(process.env['HOME'] ?? '', '~')
           if (result.status === 'injected') {
             this.log(`✅ Configured ${label} (${shortPath})`)
-            anyInjected = true
           } else if (result.status === 'already-present') {
             this.log(`⏭  ${label} already configured (skipped)`)
           } else if (result.status === 'error') {
             this.log(`❌ ${label} config error: ${result.reason}`)
-            this.log(`   Path: ${shortPath}`)
-            this.log(`   Fix manually or re-run after repairing the file.`)
-          } else {
-            this.log(`⏭  ${label} not found (skipped)`)
           }
         }
-        if (anyInjected) {
-          this.log(``)
-          this.log(`ContextGit is ready. Open Claude Code in this project and start a session.`)
-          this.log(`The agent will call context_get automatically on every session start.`)
-        }
       }
-    } catch (err) {
-      this.log(`⚠️  Could not auto-configure MCP clients: ${String(err)}`)
-      this.log(`Add the MCP server entry manually — see .contextgit/system-prompt.md`)
+    } catch {
+      // MCP client detection is best-effort — never crash init
     }
   }
 }
