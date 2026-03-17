@@ -9,54 +9,7 @@ import { simpleGit } from 'simple-git'
 import { LocalStore } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
-import { detectClients, injectMcpServer } from '../lib/client-config.js'
 import { writeClaude, writeSkills } from '../lib/init-helpers.js'
-
-const MCP_SYSTEM_PROMPT = `You have access to ContextGit memory tools.
-
-At the start of every session, call context_get with scope=global immediately — before reading any files, before asking any questions, before doing any work. Do not skip this step.
-
-After completing significant work (a feature, a decision, a resolved problem), call context_commit with a message describing what was done, what was decided, and any open questions. Include the current git branch and commit hash at the top of the message.
-
-If you are about to explore a risky or experimental approach, call context_branch first to create an isolated context workspace.`
-
-const SYSTEM_PROMPT_FRAGMENT = `\
-You have access to ContextGit memory tools.
-
-## Session Start (do this every time)
-Call context_get with scope=global immediately.
-Do not ask questions first. Read the snapshot, then start working.
-Start the highest priority item from the snapshot.
-
-## What counts as one task (commit after each)
-Match the grain of your plan:
-- Numbered steps in a plan → each numbered step = one commit
-- User stories → each accepted story = one commit
-- No plan → each logical unit of change (one file, one feature, one fix) = one commit
-
-Do NOT batch unrelated changes into one commit.
-When in doubt, commit more often rather than less.
-
-## After EVERY completed task
-Immediately, without being asked:
-\`\`\`
-context_commit "what was built | key decisions | next task"
-\`\`\`
-Do not proceed to the next task until the current one is committed.
-
-## When scope changes mid-session
-1. Write a context_commit with replan: prefix BEFORE building new scope:
-   context_commit "replan: <what changed and why>"
-2. Then build the new scope
-3. Write a normal context_commit when done
-
-## Session End (do this every time)
-Call context_commit with:
-- what was built
-- key decisions and why
-- open threads
-- the first concrete task for the next session
-`
 
 export default class Init extends Command {
   static description = 'Initialize ContextGit in this project'
@@ -79,7 +32,6 @@ export default class Init extends Command {
     const cwd = process.cwd()
     const configDir  = join(cwd, '.contextgit')
     const configPath = join(configDir, 'config.json')
-    const promptPath = join(configDir, 'system-prompt.md')
     // True if the user explicitly passed --hooks or --no-hooks
     const hooksExplicit = argv.some(a => String(a).startsWith('--hooks') || String(a) === '--no-hooks')
 
@@ -102,6 +54,17 @@ export default class Init extends Command {
           installGitHooks(cwd)
           this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
         }
+
+        // Write CLAUDE.md + skills even on re-init (idempotent)
+        const claudeResult = writeClaude(cwd)
+        if (claudeResult.status === 'written') {
+          this.log(`✅ CLAUDE.md updated            (contextgit memory section appended)`)
+        }
+        const skillsResult = writeSkills(cwd)
+        if (skillsResult.status === 'written') {
+          this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
+        }
+
         this.log('ContextGit already initialized. Config found at .contextgit/config.json')
         return
       }
@@ -114,9 +77,7 @@ export default class Init extends Command {
         name: `Context: ${gitBranch}`,
         gitBranch,
       })
-      writeSystemPrompt(promptPath)
       this.log(`Recreated project "${existing.project}" (${existing.projectId}) for branch: ${gitBranch}`)
-      this.log(`System prompt: .contextgit/system-prompt.md`)
       if (flags.hooks) {
         installGitHooks(cwd)
         this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
@@ -150,13 +111,11 @@ export default class Init extends Command {
       embeddingModel: 'local',
     }
     writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
-    writeSystemPrompt(promptPath)
 
-    this.log(`Initialized ContextGit for project: ${projectName}`)
-    this.log(`Project ID:  ${projectId}`)
-    this.log(`Branch:      ${gitBranch}`)
-    this.log(`Config:      .contextgit/config.json`)
-    this.log(`DB:          ~/.contextgit/projects/${projectId}.db`)
+    this.log(`✅ Project initialized          (.contextgit.json)`)
+    this.log(`   Project:  ${projectName}`)
+    this.log(`   ID:       ${projectId}`)
+    this.log(`   Branch:   ${gitBranch}`)
     this.log(``)
 
     // BUG-3 fix: prompt for hooks unless user was explicit about it
@@ -169,12 +128,10 @@ export default class Init extends Command {
 
     if (installHooks) {
       installGitHooks(cwd)
-      this.log(`Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)`)
+      this.log(`✅ Git hooks installed          (.git/hooks/post-commit, post-checkout, post-merge)`)
     } else {
-      this.log(`Skipped hooks. Run "contextgit init --hooks" anytime to install them.`)
+      this.log(`⏭  Git hooks skipped           (run "contextgit init --hooks" anytime to install)`)
     }
-
-    this.log(``)
 
     // ── Write CLAUDE.md fragment ───────────────────────────────────────────────
     const claudeResult = writeClaude(cwd)
@@ -190,37 +147,13 @@ export default class Init extends Command {
     const skillsResult = writeSkills(cwd)
     if (skillsResult.status === 'written') {
       this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
-      this.log(``)
-      this.log(`ContextGit is ready. Start a Claude Code session in this project.`)
-      this.log(`The agent will load project memory automatically via MCP tool discovery.`)
     } else {
       this.log(`⚠️  Skills not installed        (could not write to .claude/skills/ — create manually)`)
-      this.log(``)
-      this.log(`ContextGit is ready. MCP tools and CLAUDE.md are configured.`)
-      this.log(`For full skill support, create .claude/skills/ manually.`)
     }
 
-    // ── Auto-configure MCP clients ─────────────────────────────────────────────
-    try {
-      const clients = detectClients()
-      if (clients.length > 0) {
-        this.log(``)
-        for (const client of clients) {
-          const result = injectMcpServer(client.path, client.type, MCP_SYSTEM_PROMPT)
-          const label = clientLabel(client.type).padEnd(14)
-          const shortPath = client.path.replace(process.env['HOME'] ?? '', '~')
-          if (result.status === 'injected') {
-            this.log(`✅ Configured ${label} (${shortPath})`)
-          } else if (result.status === 'already-present') {
-            this.log(`⏭  ${label} already configured (skipped)`)
-          } else if (result.status === 'error') {
-            this.log(`❌ ${label} config error: ${result.reason}`)
-          }
-        }
-      }
-    } catch {
-      // MCP client detection is best-effort — never crash init
-    }
+    this.log(``)
+    this.log(`ContextGit is ready. Start a Claude Code session in this project.`)
+    this.log(`The agent will load project memory automatically via MCP tool discovery.`)
   }
 }
 
@@ -233,17 +166,6 @@ async function detectGitBranch(cwd: string): Promise<string> {
   } catch {
     return 'main'
   }
-}
-
-function writeSystemPrompt(promptPath: string): void {
-  writeFileSync(promptPath, SYSTEM_PROMPT_FRAGMENT)
-}
-
-function clientLabel(type: string): string {
-  if (type === 'claude-code') return 'Claude Code'
-  if (type === 'cursor') return 'Cursor'
-  if (type === 'claude-desktop') return 'Claude Desktop'
-  return type
 }
 
 /** Prompt the user with a yes/no question. Defaults to yes on empty input. */
