@@ -97,7 +97,8 @@ export default class PushCmd extends Command {
 
       // Push missing commits
       const localCommits = await allCommits(local, branch.id)
-      const missing = localCommits.filter(c => !remoteCommitIds.has(c.id))
+      // Reverse to push oldest-first — parent_id FK requires parent to exist before child
+      const missing = localCommits.filter(c => !remoteCommitIds.has(c.id)).reverse()
 
       if (missing.length === 0) {
         this.log(`[branch] ${branch.name}: up to date (${localCommits.length} commits)`)
