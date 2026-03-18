@@ -812,66 +812,34 @@ CREATE INDEX idx_branches_git ON branches(project_id, git_branch);
 CREATE INDEX idx_claims_project_status ON claims(project_id, status, released_at);
 ```
 
-### 8.3 RemoteStore (Postgres + pgvector)
+### 8.3 SupabaseStore (Postgres + pgvector)
 
-Mirrors LocalStore schema with additions for multi-tenancy and platform features:
+`SupabaseStore` implements `ContextStore` directly via `@supabase/supabase-js`. It is a push/pull sync target — LocalStore remains the live primary store. Push/pull syncs LocalStore ↔ SupabaseStore.
 
-```sql
-CREATE TABLE organizations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  plan TEXT NOT NULL DEFAULT 'free',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+Schema: `packages/store/src/supabase/schema.sql`. Applied once via the Supabase SQL editor.
 
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id),
-  email TEXT UNIQUE NOT NULL,
-  display_name TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+**Key schema decisions:**
 
-CREATE TABLE projects (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id),
-  name TEXT NOT NULL,
-  slug TEXT NOT NULL,
-  description TEXT,
-  visibility TEXT NOT NULL DEFAULT 'private',
-  github_url TEXT,
-  stars INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(org_id, slug)
-);
+| Decision | Rationale |
+|----------|-----------|
+| TEXT primary keys (nanoid) | ID parity with LocalStore — no translation on push/pull |
+| TIMESTAMPTZ | Postgres best practice; `Date` objects at interface boundary |
+| HNSW embedding index | Works with incremental inserts; IVFFlat requires training data |
+| `project_id` on `commits` | Denormalized for query efficiency; not mapped to `Commit` domain type |
+| `fts` generated tsvector column | Full-text search via GIN index; kept in sync automatically |
+| No orgs/users/RLS | Phase 3 Step 3 — service role key used until auth ships |
 
--- Core tables mirror LocalStore (UUID keys, TIMESTAMPTZ dates, same columns)
+**Core tables:** `projects`, `branches`, `commits`, `threads`, `claims`, `agents`
 
-CREATE EXTENSION IF NOT EXISTS vector;
-ALTER TABLE commits ADD COLUMN embedding vector(384);
-CREATE INDEX ON commits USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+**RPC functions:**
+- `match_commits(query_embedding, project_id, match_count)` — semantic search via pgvector cosine similarity
+- `list_active_claims(p_project_id)` — active claims with TTL filter in SQL
 
-CREATE TABLE stars (
-  user_id UUID REFERENCES users(id),
-  project_id UUID REFERENCES projects(id),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (user_id, project_id)
-);
+**Configuration:**
+- `config.supabaseUrl` — written by `contextgit set-remote supabase <url>`
+- `SUPABASE_SERVICE_KEY` env var — service role key, never written to disk
 
-CREATE TABLE forks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_project_id UUID REFERENCES projects(id),
-  forked_project_id UUID REFERENCES projects(id),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Row-level security
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "org members see own projects or public"
-  ON projects FOR ALL
-  USING (org_id = auth.jwt() ->> 'org_id' OR visibility = 'public');
-```
+**Push/pull priority:** `--remote` flag (HTTP) > `config.supabaseUrl` (Supabase) > `config.remote` (HTTP)
 
 ### 8.4 getSessionSnapshot Implementation
 
@@ -1263,40 +1231,26 @@ Supabase free tier covers all development and early beta. Upgrade to Supabase Pr
 - Does `contextgit snapshot --format agents-md` generate a useful AGENTS.md in a real Ralph loop?
 - Does the REST API snapshot endpoint work correctly for a simulated CI pipeline call?
 
-### Phase 2 — Weeks 5–8: Team, Multi-Agent, CI
+### Phase 2 — Weeks 5–8: Team, Multi-Agent, CI (shipped)
 
-| Week | Deliverable |
+| Period | Deliverable |
+|--------|-------------|
+| Weeks 5–6 | CLI completeness: branch, merge, search, status, push, pull, keygen, doctor, claim, unclaim. Production API fix (`/v1/store` mounted). Git hooks (`git-sync.ts`). |
+| Week 7 | Delta 1 — Coordination primitives: claims table, `project_task_claim`/`project_task_unclaim` MCP tools, active claims in snapshot. |
+| Weeks 7–8 | Delta 2 — Multi-agent protocol: `getContextDelta`, `since` on `project_memory_load`, `for_agent_id` pre-claiming, inline `[CLAIMED]`/`[FREE]` formatter. |
+| Week 8 | Delta 3 — Session contract enforcement: MCP tools renamed `project_memory_*`, CLAUDE.md fragment + skills written by `init`. |
+
+**Phase 2 gate (all passed):** Three workflow types contributing to the same project context store. Orchestrator can pre-claim, poll, and spawn agents without collision.
+
+### Phase 3 — Team + Web Platform
+
+| Step | Deliverable |
 |------|-------------|
-| 5 | RemoteStore (Postgres + pgvector). Supabase setup. API key auth with role scoping. |
-| 6 | Agent registry with roles and workflow types. Orchestrator synthesis commits. |
-| 7 | CI integration — GitHub Actions example workflow, tested end to end. Context sync push/pull. |
-| 8 | Multi-workflow test: Ralph loop + interactive session + CI pipeline, all writing to same project. Validate cross-workflow context retrieval. |
-
-**Phase 2 delta — Multi-agent coordination (added 2026-03-13):**
-
-See `docs/ContextGit_DELTA_multiagent.md` for full spec.
-
-Build order:
-1. Migration: `updated_at` on threads + trigger
-2. Store queries: `listCommitsSince`, `listThreadChangesSince`
-3. `CONTEXTGIT_AGENT_ID` env override in MCP server
-4. `for_agent_id` param on `context_claim`
-5. `since` param on `context_get` (MCP + REST API)
-6. Snapshot formatter: inline `[CLAIMED]` / `[FREE]` on threads
-7. `thread_id` on claims (schema + MCP param + formatter linkage)
-
-**Phase 2 gate:** Three different workflow types contributing to the same project context store. Each workflow's snapshot reflects commits from the others. Orchestrator can pre-claim, poll, and spawn agents without collision.
-
-### Phase 3 — Weeks 9–14: Web Platform
-
-| Week | Deliverable |
-|------|-------------|
-| 9 | REST API for platform. Auth. Project home. |
-| 10 | Branch tree (D3.js, workflow-type node shapes). Commit diff view with full attribution. |
-| 11 | Threads panel. Workflow breakdown page. Search UI. |
-| 12 | Public repos. Clone bundle. Star and fork. |
-| 13 | Live team dashboard with workflow filter (WebSocket). Knowledge map. |
-| 14 | Polish, performance, docs. Public beta. |
+| 1 | SupabaseStore: core tables, `SupabaseStore` implementing `ContextStore`, push/pull against Supabase, `set-remote supabase` command. |
+| 2 | Web platform: React app, branch tree (D3.js), commit diff view, threads panel, search UI. Read-only, service-key-backed. |
+| 3 | Auth + multi-tenancy: Supabase Auth, GitHub OAuth, API keys, RLS. Required before publishing opens. |
+| 4 | Public repos: publish, clone, fork, star. Auth gates publishing; reading stays open. |
+| 5 | Live team dashboard: WebSocket, workflow filter. |
 
 ---
 
