@@ -61,6 +61,13 @@ export default class PullCmd extends Command {
       this.error(`Project ${config.projectId} not found on remote. Push first.`)
     }
 
+    // Ensure project exists locally before creating branches (FK requirement)
+    const localProject = await local.getProject(config.projectId).catch(() => null)
+    if (!localProject && !dryRun) {
+      await local.createProject({ id: config.projectId, name: config.project })
+      this.log(`[project] created locally: ${config.project}`)
+    }
+
     // List all remote branches
     const remoteBranches = await remote.listBranches(config.projectId)
     let totalPulled = 0
