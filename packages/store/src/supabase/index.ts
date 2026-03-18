@@ -100,7 +100,7 @@ function parseThread(row: Row): Thread {
     branchId: row['branch_id'] as string,
     description: row['description'] as string,
     status: row['status'] as Thread['status'],
-    workflowType: row['workflow_type'] as string | undefined ?? undefined,
+    workflowType: row['workflow_type'] as import('@contextgit/core').WorkflowType | undefined ?? undefined,
     openedInCommit: row['opened_in_commit'] as string,
     closedInCommit: row['closed_in_commit'] as string | undefined ?? undefined,
     closedNote: row['closed_note'] as string | undefined ?? undefined,
@@ -153,16 +153,19 @@ export class SupabaseStore implements ContextStore {
   }
 
   // Throws on Supabase error; returns T (not null).
-  private async q<T>(p: Promise<{ data: T | null; error: { message: string } | null }>): Promise<T> {
-    const { data, error } = await p
+  // Accepts PromiseLike so Supabase query builder types work without explicit casts.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async q<T>(p: any): Promise<T> {
+    const { data, error } = await p as { data: T | null; error: { message: string } | null }
     if (error) throw new Error(error.message)
     if (data === null) throw new Error('Unexpected null response from Supabase')
     return data
   }
 
   // Like q() but returns null instead of throwing when data is null.
-  private async qNull<T>(p: Promise<{ data: T | null; error: { message: string } | null }>): Promise<T | null> {
-    const { data, error } = await p
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async qNull<T>(p: any): Promise<T | null> {
+    const { data, error } = await p as { data: T | null; error: { message: string } | null }
     if (error) throw new Error(error.message)
     return data
   }
