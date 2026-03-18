@@ -23,7 +23,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
 import { ContextEngine, EmbeddingService, SnapshotFormatter } from '@contextgit/core'
-import { LocalStore, RemoteStore } from '@contextgit/store'
+import { LocalStore, RemoteStore, SupabaseStore } from '@contextgit/store'
 import { loadConfig } from './config.js'
 import { captureGitMetadata } from './git-sync.js'
 import { AutoSnapshotManager } from './auto-snapshot.js'
@@ -67,6 +67,7 @@ async function resolveContextBranch(
 interface ServerContext {
   engine: ContextEngine
   store: ContextStore
+  claimsStore: ContextStore  // Supabase when configured, LocalStore otherwise
   projectId: string
   branchId: string
   config: ContextGitConfig
@@ -104,7 +105,16 @@ async function bootstrap(): Promise<ServerContext> {
   )
   await engine.init(projectId, branchId)
 
-  return { engine, store, projectId, branchId, config, agentId }
+  let claimsStore: ContextStore = store  // default: same as primary store
+
+  if (config.supabaseUrl) {
+    const key = process.env['SUPABASE_SERVICE_KEY']
+    if (key) {
+      claimsStore = new SupabaseStore(config.supabaseUrl, key)
+    }
+  }
+
+  return { engine, store, claimsStore, projectId, branchId, config, agentId }
 }
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
@@ -145,6 +155,12 @@ export async function createServer(): Promise<McpServer> {
         ctx.branchId,
         agent_role ? { agentRole: agent_role } : undefined,
       )
+
+      // If claimsStore is different (Supabase configured), replace claims with live data
+      if (ctx.claimsStore !== ctx.store) {
+        snapshot.activeClaims = await ctx.claimsStore.listActiveClaims(ctx.projectId)
+      }
+
       const text = new SnapshotFormatter().format(snapshot, format ?? 'agents-md')
       return {
         content: [{ type: 'text' as const, text }],
@@ -402,7 +418,7 @@ The cost of not branching is re-explaining to the next session why you abandoned
   }) => {
     await autoSnapshot.onToolCall('context_claim')
     try {
-      const claim = await ctx.store.claimTask(ctx.projectId, ctx.branchId, {
+      const claim = await ctx.claimsStore.claimTask(ctx.projectId, ctx.branchId, {
         task,
         agentId: for_agent_id ?? ctx.agentId,
         role: ctx.config.agentRole ?? 'solo',
@@ -462,7 +478,7 @@ If you skip claiming, another agent may start the same task, producing duplicate
   const handleProjectTaskUnclaim = async ({ claim_id }: { claim_id: string }) => {
     await autoSnapshot.onToolCall('context_unclaim')
     try {
-      await ctx.store.unclaimTask(claim_id)
+      await ctx.claimsStore.unclaimTask(claim_id)
       return {
         content: [{ type: 'text' as const, text: `Claim released.\nID: ${claim_id}` }],
       }
