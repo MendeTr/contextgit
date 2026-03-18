@@ -1562,14 +1562,14 @@ export default class SetRemoteCmd extends Command {
       if (!args.url) {
         this.error('URL required: contextgit set-remote supabase <url>', { exit: 1 })
       }
-      saveConfig({ supabaseUrl: args.url })
+      saveConfig({ supabaseUrl: args.url })   // saveConfig merges internally — spread not needed
       this.log(`Supabase remote set: ${args.url}`)
       this.log(`Set SUPABASE_SERVICE_KEY in your shell to authenticate.`)
       this.log(`Run 'contextgit push' to sync commits to Supabase.`)
     } else {
       const url = args.typeOrUrl
       const previous = config.remote
-      saveConfig({ remote: url })
+      saveConfig({ remote: url })             // saveConfig merges internally — spread not needed
       if (previous) {
         this.log(`Remote updated: ${previous} → ${url}`)
       } else {
