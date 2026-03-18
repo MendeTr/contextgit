@@ -31,4 +31,4 @@ coverage/
 # Logs
 *.log
 npm-debug.log*
-pnpm-debug.log*
+pnpm-debug.log*.worktrees/
