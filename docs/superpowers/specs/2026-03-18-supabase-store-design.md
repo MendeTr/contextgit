@@ -14,6 +14,11 @@ Push/pull syncs LocalStore ↔ SupabaseStore. The HTTP `RemoteStore` stays for s
 
 This is the foundation for team sharing, public repos, and the web platform.
 
+**SupabaseStore is always a push/pull sync target — never a live primary store.**
+The primary store for all live reads/writes (MCP server, CLI, API) is always LocalStore.
+Supabase is written to via `contextgit push` and read from via `contextgit pull`.
+This maps cleanly to: work locally → push to share → others pull to sync.
+
 ---
 
 ## What Is Not In Scope
@@ -36,6 +41,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE projects (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
+  description TEXT,
+  github_url  TEXT,
   summary     TEXT NOT NULL DEFAULT '',
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
@@ -73,6 +80,9 @@ CREATE TABLE commits (
   commit_type              TEXT NOT NULL DEFAULT 'manual',
   git_commit_sha           TEXT,
   embedding                vector(384),
+  fts                      tsvector GENERATED ALWAYS AS (
+                             to_tsvector('english', message || ' ' || content)
+                           ) STORED,
   created_at               TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -80,6 +90,7 @@ CREATE TABLE commits (
 CREATE INDEX ON commits USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX idx_commits_branch   ON commits(branch_id, created_at DESC);
 CREATE INDEX idx_commits_project  ON commits(project_id);
+CREATE INDEX idx_commits_fts      ON commits USING GIN(fts);
 
 CREATE TABLE threads (
   id               TEXT PRIMARY KEY,
@@ -121,17 +132,19 @@ CREATE TABLE agents (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Semantic search function — direct filter on commits.project_id, no subquery
+-- Semantic search: direct filter on commits.project_id, no subquery through branches.
+-- Named parameters are avoided in the body to prevent shadowing commits.project_id.
+-- $1 = query_embedding, $2 = project_id (TEXT), $3 = match_count (INT)
 CREATE OR REPLACE FUNCTION match_commits(
   query_embedding vector(384),
   project_id      TEXT,
   match_count     INT
 ) RETURNS TABLE(id TEXT, score FLOAT) AS $$
-  SELECT id, 1 - (embedding <=> query_embedding) AS score
+  SELECT commits.id, 1 - (commits.embedding <=> $1) AS score
   FROM commits
-  WHERE project_id = $2
-    AND embedding IS NOT NULL
-  ORDER BY embedding <=> query_embedding
+  WHERE commits.project_id = $2
+    AND commits.embedding IS NOT NULL
+  ORDER BY commits.embedding <=> $1
   LIMIT $3;
 $$ LANGUAGE sql;
 ```
@@ -144,8 +157,11 @@ $$ LANGUAGE sql;
 | TIMESTAMPTZ dates | Postgres best practice; `ContextStore` interface uses `Date` objects so both stores are transparent to callers |
 | `embedding` inline on `commits` | Simpler than a separate virtual table; pgvector supports NULL so unindexed commits work fine |
 | HNSW index | Works with incremental inserts from day one; IVFFlat requires a minimum training corpus |
-| `project_id` on `commits` | Denormalized for query efficiency; avoids JOIN through branches on every semantic search |
-| No orgs/users/RLS | Deferred — service role key is used for all access until auth ships in Phase 3, Step 3 |
+| `project_id` on `commits` | Denormalized server-side column for query efficiency. Not mapped back to the `Commit` domain type (which has no `projectId` field). Extra column is silently ignored during row→domain mapping. Do not add `projectId` to the `Commit` type — that would break LocalStore. |
+| `fts` generated tsvector column | Full-text search without a separate table; GIN index makes it fast; `GENERATED ALWAYS AS ... STORED` keeps it in sync automatically |
+| Fully-qualified column references in `match_commits` | Eliminates ambiguity between the `project_id` function parameter and the `commits.project_id` column; uses positional `$1/$2/$3` in body |
+| `description`, `github_url` on `projects` | Match `Project` and `ProjectInput` domain types — these fields are optional but must survive a push/pull round-trip |
+| No orgs/users/RLS | Deferred — service role key used for all access until auth ships in Phase 3, Step 3 |
 
 ---
 
@@ -173,6 +189,8 @@ export class SupabaseStore implements ContextStore {
 
 **Timestamp parsing** — Supabase returns ISO strings. A local `d(s)` helper (identical pattern to `RemoteStore`) converts to `Date`.
 
+**`createCommit`** — `CommitInput` carries `branchId` but not `projectId`. `SupabaseStore.createCommit` resolves `projectId` by first calling `getBranch(branchId)` to get the branch row, then uses `branch.projectId` for the `project_id` column. This adds one round-trip per commit insert, which is acceptable for a push/pull sync target.
+
 **`indexEmbedding`** — updates `commits.embedding` in place:
 ```typescript
 await this.db.from('commits').update({ embedding: Array.from(vector) }).eq('id', commitId)
@@ -187,16 +205,42 @@ const { data } = await this.db.rpc('match_commits', {
 })
 ```
 
-**TTL filter on claims** — `claimed_at + (ttl || ' milliseconds')::interval > NOW()` expressed in the Supabase query via `.filter()` or a Postgres function. Claims past TTL are excluded from `listActiveClaims`.
+**`fullTextSearch`** — queries the `fts` generated column using `plainto_tsquery`:
+```typescript
+const { data } = await this.db
+  .from('commits')
+  .select('*')
+  .eq('project_id', projectId)
+  .textSearch('fts', query, { type: 'plain', config: 'english' })
+```
+Returns results mapped to `SearchResult[]` with `matchType: 'fulltext'` and a fixed score of `1.0` (Supabase text search does not expose BM25 scores via the JS client; ranking is handled by the GIN index ordering).
 
-**`getContextDelta` since filter** — converts epoch ms to TIMESTAMPTZ:
+**`mergeBranch`** — the `summary` argument is the merge commit's content/summary, not a branch row update. The `branches.summary` column is populated when `updateBranchHead` is called — the engine calls `updateBranchHead` separately after `mergeBranch` as part of the merge flow. `SupabaseStore.mergeBranch` does not write to `branches.summary`.
+
+**`syncThread`** — uses Supabase upsert on `id` conflict. On conflict the full row is replaced (the thread may have been closed with a note since it was first pushed):
+```typescript
+await this.db.from('threads').upsert(row, { onConflict: 'id' })
+```
+
+**`upsertAgent`** — upserts on `id` conflict, updating `last_seen`, `total_commits`, `display_name`, and `role`:
+```typescript
+await this.db.from('agents').upsert(row, { onConflict: 'id' })
+```
+Supabase `.upsert()` replaces all columns on conflict by default, which is correct here.
+
+**`getContextDelta` since-filter** — converts epoch ms to ISO string and uses strictly-greater-than (`>`), matching LocalStore semantics:
 ```typescript
 .gt('created_at', new Date(since).toISOString())
 ```
+A commit at exactly `since` ms is excluded from the delta. This matches `LocalStore`'s `> datetime(since/1000, 'unixepoch')` query.
 
-**`getSessionSnapshot`** — implemented identically to `LocalStore`: fetch branch, head commit summary, recent commits (role-filtered if `options.agentRole` set), open threads, active claims. No special Supabase logic.
+**TTL filter on claims** (`listActiveClaims`) — claims past TTL excluded using Postgres interval arithmetic:
+```sql
+claimed_at + (ttl || ' milliseconds')::interval > NOW()
+```
+Expressed via a `.filter()` call or a Postgres RPC function if Supabase JS cannot express interval arithmetic natively.
 
-**Error handling** — Supabase JS returns `{ data, error }`. Every method throws on non-null `error`. No silent failures.
+**Error handling** — Supabase JS returns `{ data, error }`. Every method throws `new Error(error.message)` on non-null `error`. No silent failures.
 
 ---
 
@@ -212,44 +256,80 @@ interface ContextGitConfig {
 }
 ```
 
+`supabaseUrl` is a push/pull sync target, parallel to `remote` (HTTP). The two are independent:
+- `config.remote` → HTTP RemoteStore for self-hosted API server
+- `config.supabaseUrl` → SupabaseStore for Supabase-hosted tier
+
+If both are set, `supabaseUrl` takes precedence for push/pull (see bootstrap below).
+The `store` config field (used by MCP/API to select the live store) is not changed — LocalStore remains the live store.
+
 ### `set-remote` command
 
-```
-contextgit set-remote supabase https://xyzproject.supabase.co
-```
+Extended to accept an optional `type` first argument:
 
-When first arg is `supabase`, write `supabaseUrl` to config and print:
 ```
-Supabase remote set: https://xyzproject.supabase.co
-Set SUPABASE_SERVICE_KEY in your shell to authenticate.
-Run 'contextgit push' to sync commits.
+contextgit set-remote supabase https://xyzproject.supabase.co   # writes supabaseUrl
+contextgit set-remote https://api.example.com                   # writes remote (existing behaviour)
 ```
 
-Existing behavior (`contextgit set-remote <url>`) is unchanged — writes `config.remote` for HTTP RemoteStore.
-
-### Push/pull bootstrap (packages/cli/src/commands/push.ts + pull.ts)
-
-Remote store resolved in priority order:
-
+oclif args schema:
 ```typescript
-function resolveRemoteStore(config: ContextGitConfig): ContextStore {
-  if (config.supabaseUrl) {
-    const key = process.env['SUPABASE_SERVICE_KEY']
-    if (!key) throw new Error('SUPABASE_SERVICE_KEY env var is required')
-    return new SupabaseStore(config.supabaseUrl, key)
-  }
-  if (config.remote) {
-    return new RemoteStore(config.remote)
-  }
-  throw new Error('No remote configured. Run: contextgit set-remote supabase <url>')
+static args = {
+  typeOrUrl: Args.string({ required: true }),           // 'supabase' keyword or a URL
+  url:       Args.string({ required: false }),           // URL when first arg is 'supabase'
 }
 ```
 
-### `contextgit doctor` — new check
+Dispatch: if `typeOrUrl === 'supabase'`, write `supabaseUrl = url` and print setup instructions for `SUPABASE_SERVICE_KEY`. Otherwise treat `typeOrUrl` as the remote URL (existing behaviour) and write `remote`.
 
+When `supabase` keyword is used, output:
 ```
-[ ] Supabase configured: supabaseUrl in config + SUPABASE_SERVICE_KEY in env
+Supabase remote set: https://xyzproject.supabase.co
+Set SUPABASE_SERVICE_KEY in your shell to authenticate.
+Run 'contextgit push' to sync commits to Supabase.
 ```
+
+### Push/pull bootstrap (packages/cli/src/commands/push.ts + pull.ts)
+
+The existing `--remote <url>` flag on `push`/`pull` overrides `config.remote` for the HTTP path and is preserved unchanged. It does not apply to Supabase — Supabase is always configured via `set-remote supabase`, never via `--remote`.
+
+Remote store resolved in this priority order:
+
+```typescript
+function resolveRemoteStore(config: ContextGitConfig, remoteFlag?: string): ContextStore {
+  // --remote flag always wins and always means HTTP RemoteStore
+  if (remoteFlag) return new RemoteStore(remoteFlag)
+
+  // Supabase takes precedence over HTTP remote when both configured
+  if (config.supabaseUrl) {
+    const key = process.env['SUPABASE_SERVICE_KEY']
+    if (!key) throw new Error(
+      'SUPABASE_SERVICE_KEY env var is required when supabaseUrl is configured.\n' +
+      'Set it in your shell or Claude Code env config.'
+    )
+    return new SupabaseStore(config.supabaseUrl, key)
+  }
+
+  if (config.remote) return new RemoteStore(config.remote)
+
+  throw new Error(
+    'No remote configured.\n' +
+    'Run: contextgit set-remote supabase <url>  (Supabase)\n' +
+    '  or: contextgit set-remote <url>          (self-hosted API)'
+  )
+}
+```
+
+### `contextgit doctor` — Supabase check
+
+Three explicit states:
+
+| State | Output |
+|-------|--------|
+| `supabaseUrl` absent | `[ ] Supabase: not configured (optional)` |
+| `supabaseUrl` present, `SUPABASE_SERVICE_KEY` absent | `[!] Supabase: URL set but SUPABASE_SERVICE_KEY missing` |
+| Both present + GET to `<supabaseUrl>/rest/v1/projects?limit=1` returns 401 | `[!] Supabase: reachable but SUPABASE_SERVICE_KEY rejected` |
+| Both present + GET returns 2xx or 3xx | `[✓] Supabase: connected` |
 
 ---
 
@@ -261,24 +341,46 @@ function resolveRemoteStore(config: ContextGitConfig): ContextStore {
 
 | Period | Deliverable |
 |--------|-------------|
-| Weeks 5–6 | CLI completeness: branch, merge, search, status, push, pull, keygen, doctor, claim, unclaim. Production API fix. Git hooks (`git-sync.ts`). |
+| Weeks 5–6 | CLI completeness: branch, merge, search, status, push, pull, keygen, doctor, claim, unclaim. Production API fix (`/v1/store` mounted). Git hooks (`git-sync.ts`). |
 | Week 7 | Delta 1 — Coordination primitives: claims table, `project_task_claim`/`project_task_unclaim` MCP tools, active claims in snapshot. |
 | Weeks 7–8 | Delta 2 — Multi-agent protocol: `getContextDelta`, `since` on `project_memory_load`, `for_agent_id` pre-claiming, inline `[CLAIMED]`/`[FREE]` formatter. |
 | Week 8 | Delta 3 — Session contract enforcement: MCP tools renamed `project_memory_*`, CLAUDE.md fragment + skills written by `init`. |
 
-#### Phase 3 (next — corrected build order)
+#### Phase 3 (next — correct build order)
 
 | Step | Deliverable |
 |------|-------------|
 | 1 | SupabaseStore: core tables, `SupabaseStore` implementing `ContextStore`, push/pull against Supabase, `set-remote supabase` command. |
-| 2 | Web platform: React app, branch tree (D3.js), commit diff view, threads panel, search UI. Read-only, service key backed. |
+| 2 | Web platform: React app, branch tree (D3.js), commit diff view, threads panel, search UI. Read-only, service-key-backed. |
 | 3 | Auth + multi-tenancy: Supabase Auth, GitHub OAuth, API keys, RLS. Required before publishing opens. |
 | 4 | Public repos: publish, clone, fork, star. Auth gates publishing; reading stays open. |
 | 5 | Live team dashboard: WebSocket, workflow filter. |
 
 ### Section 8.3 — RemoteStore (Postgres + pgvector)
 
-To be updated with the corrected schema (TEXT PKs, HNSW index, `project_id` on commits, no orgs/users/RLS in Phase 3 Step 1 scope).
+To be rewritten with:
+- Corrected schema (TEXT PKs, HNSW index, `project_id` on commits, `fts` generated column, `description`/`github_url` on projects)
+- Clarification that `SupabaseStore` implements `ContextStore` directly (not via HTTP)
+- Note that RLS/orgs/users are Phase 3 Step 3 scope
+
+---
+
+## Implementation Order
+
+**`packages/core/src/types.ts` must be changed first** — adding `supabaseUrl?` to `ContextGitConfig`.
+This is a prerequisite for all CLI files. `resolveRemoteStore` reads `config.supabaseUrl` directly;
+if any CLI file is compiled before `types.ts` is updated, TypeScript will reject the property access
+and the build will fail.
+
+Suggested order:
+1. `packages/core/src/types.ts` — add `supabaseUrl?` to `ContextGitConfig`
+2. `packages/store/src/supabase/schema.sql` — DDL (run in Supabase dashboard)
+3. `packages/store/src/supabase/index.ts` — `SupabaseStore` implementation
+4. `packages/store/package.json` — add `@supabase/supabase-js`
+5. `packages/cli/src/commands/set-remote.ts` — extend for `supabase <url>`
+6. `packages/cli/src/commands/push.ts` + `pull.ts` — `resolveRemoteStore`
+7. `packages/cli/src/commands/doctor.ts` — Supabase check
+8. `docs/ContextGit_ARCHITECTURE_v3.md` — Section 8.3 + Section 15
 
 ---
 
@@ -286,14 +388,14 @@ To be updated with the corrected schema (TEXT PKs, HNSW index, `project_id` on c
 
 | File | Change |
 |------|--------|
-| `packages/store/src/supabase/index.ts` | CREATE — `SupabaseStore` implementing `ContextStore` |
+| `packages/store/src/supabase/index.ts` | CREATE — `SupabaseStore` implementing all 20 `ContextStore` methods |
 | `packages/store/src/supabase/schema.sql` | CREATE — full DDL + `match_commits` function |
 | `packages/store/package.json` | ADD `@supabase/supabase-js` dependency |
 | `packages/core/src/types.ts` | ADD `supabaseUrl?` to `ContextGitConfig` |
-| `packages/cli/src/commands/set-remote.ts` | EXTEND — handle `supabase <url>` keyword |
-| `packages/cli/src/commands/push.ts` | UPDATE — `resolveRemoteStore` picks SupabaseStore |
+| `packages/cli/src/commands/set-remote.ts` | EXTEND — handle `supabase <url>` keyword dispatch |
+| `packages/cli/src/commands/push.ts` | UPDATE — `resolveRemoteStore` with Supabase priority, `--remote` flag preserved |
 | `packages/cli/src/commands/pull.ts` | UPDATE — same |
-| `packages/cli/src/commands/doctor.ts` | ADD — Supabase config check |
+| `packages/cli/src/commands/doctor.ts` | UPDATE — three-state Supabase check |
 | `docs/ContextGit_ARCHITECTURE_v3.md` | UPDATE — Section 8.3 schema, Section 15 phase table |
 
 ---
@@ -303,8 +405,13 @@ To be updated with the corrected schema (TEXT PKs, HNSW index, `project_id` on c
 | Gate | What to verify |
 |------|----------------|
 | Schema applies clean | Run `schema.sql` in Supabase SQL editor — no errors |
-| Push round-trip | `contextgit commit` locally → `contextgit push` → query Supabase table directly, row present |
+| Push round-trip | `contextgit commit` locally → `contextgit push` → query Supabase `commits` table directly, row present with correct `project_id` |
 | Pull round-trip | Delete local DB, `contextgit pull` → `contextgit context` shows the pushed commit |
 | Semantic search | `indexEmbedding` → `contextgit search "..."` returns results via `match_commits` RPC |
+| Full-text search | `contextgit search "keyword"` returns results via `fts` GIN index |
+| Thread upsert | Push thread → close it locally → push again → Supabase row shows `status: 'closed'` |
 | Missing key error | Unset `SUPABASE_SERVICE_KEY`, run `contextgit push` → clear error message |
-| Doctor check | `contextgit doctor` reports Supabase status correctly in both configured and unconfigured states |
+| Doctor — not configured | No `supabaseUrl` in config → `not configured (optional)` |
+| Doctor — key missing | `supabaseUrl` set, key absent → `URL set but SUPABASE_SERVICE_KEY missing` |
+| Doctor — connected | Both set, reachable → `connected` |
+| `--remote` flag preserved | `contextgit push --remote https://api.example.com` → uses HTTP RemoteStore, ignores `supabaseUrl` |
