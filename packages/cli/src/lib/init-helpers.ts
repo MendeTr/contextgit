@@ -18,20 +18,24 @@ This project uses ContextGit for persistent AI memory across sessions.
 
 Call \`project_memory_load\` immediately.
 Do not ask questions first. Read the snapshot, then start working.
-Start the highest priority item from the snapshot.
+Start the next specific task from the snapshot — not an entire feature or milestone.
+One task per session unless it is trivially small.
 
 ## After EVERY completed task
 
-Do not wait to be asked. Every completed task = immediate context commit.
-Do not proceed to the next task until the current one is committed.
+Do not wait to be asked. Every git commit = immediate context commit.
+Do not proceed to the next task until both are done.
 
-Call \`project_memory_save\` with:
-- One-line summary of what was done
-- What was decided and why
-- What was built (files changed, approach taken)
-- Open questions
-- Git branch and commit hash
-- The next concrete task
+1. \`git add . && git commit -m "feat/fix: <what was done>"\`
+2. Call \`project_memory_save\` immediately after with:
+   - One-line summary of what was done
+   - What was decided and why
+   - What was built (files changed, approach taken)
+   - Open questions
+   - Git branch and commit hash
+   - The next concrete task
+
+These two always go together. Never git commit without a context commit.
 
 ## Session End (do this every time)
 
@@ -88,25 +92,26 @@ export function writeClaude(
 
 export const CONTEXT_COMMIT_SKILL = `---
 name: context-commit
-description: "MANDATORY: Save project memory after completing ANY work. Use this skill after EVERY completed task — finished implementing a feature, resolved a bug, made a decision, closed a thread, completed a review, or ending a session. Do not wait to be asked. Do not proceed to the next task until context is committed. Triggers: task complete, git commit made, 'that's working', 'let's move on', 'I'm done', session ending. Skipping this means the next session starts completely blind."
+description: "MANDATORY: Save project memory after completing ANY work. Use this skill after EVERY completed task and EVERY git commit — finished implementing a feature, resolved a bug, made a decision, closed a thread, completed a review, or ending a session. Every git commit must be followed immediately by a context commit. Do not wait to be asked. Do not proceed to the next task until both git commit and context commit are done. Triggers: git commit made, task complete, 'that's working', 'let's move on', 'I'm done', session ending. Skipping this means the next session starts completely blind."
 ---
 
 # ContextGit — Context Commit Discipline
 
-## RULE: Every completed task = immediate context commit
+## RULE: Every git commit = immediate context commit
 
 Do not wait to be asked. Do not batch. Do not skip.
-After every completed task, call \`project_memory_save\` immediately.
-Do not proceed to the next task until the current one is committed.
+After every git commit, call \`project_memory_save\` immediately.
+Do not proceed to the next task until both git commit and context commit are done.
+These two always go together. Never git commit without a context commit.
 
 ## When to commit context
 
 Call \`project_memory_save\` (MCP tool) after:
+- Every git commit (mandatory — these always go together)
 - Completing a feature or task (before moving to the next)
 - Making an architectural decision or choosing between options
 - Resolving a bug, blocker, or open question
 - Closing a thread
-- Making a git commit
 - Before ending the session for any reason
 
 ## What makes a good commit message
