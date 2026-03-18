@@ -21,11 +21,11 @@ importers:
   packages/api:
     dependencies:
       '@contextgit/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.0.11
+        version: 0.0.11
       '@contextgit/store':
-        specifier: workspace:*
-        version: link:../store
+        specifier: 0.0.11
+        version: 0.0.11
       express:
         specifier: ^4.19.0
         version: 4.22.1
@@ -46,14 +46,14 @@ importers:
   packages/cli:
     dependencies:
       '@contextgit/api':
-        specifier: workspace:*
-        version: link:../api
+        specifier: 0.0.11
+        version: 0.0.11
       '@contextgit/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.0.11
+        version: 0.0.11
       '@contextgit/store':
-        specifier: workspace:*
-        version: link:../store
+        specifier: 0.0.11
+        version: 0.0.11
       '@oclif/core':
         specifier: ^3.27.0
         version: 3.27.0
@@ -96,11 +96,11 @@ importers:
   packages/mcp:
     dependencies:
       '@contextgit/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.0.8
+        version: 0.0.8
       '@contextgit/store':
-        specifier: workspace:*
-        version: link:../store
+        specifier: 0.0.8
+        version: 0.0.8
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(zod@3.25.76)
@@ -121,8 +121,11 @@ importers:
   packages/store:
     dependencies:
       '@contextgit/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.0.11
+        version: 0.0.11
+      '@supabase/supabase-js':
+        specifier: ^2.99.2
+        version: 2.99.2
       better-sqlite3:
         specifier: ^9.4.0
         version: 9.6.0
@@ -150,6 +153,21 @@ packages:
 
   '@anthropic-ai/sdk@0.40.1':
     resolution: {integrity: sha512-DJMWm8lTEM9Lk/MSFL+V+ugF7jKOn0M2Ujvb5fN8r2nY14aHbGPZ1k6sgjL+tpJ3VuOGJNG+4R83jEpOuYPv8w==}
+
+  '@contextgit/api@0.0.11':
+    resolution: {integrity: sha512-97V7o+NTJFZyVlpFk/pCNZ1qOlR+91fj1mOQSpjZDnzyQKwOQNd/OxNOcLP04UvMrZF6wT/1qLKAnWwDAreRpA==}
+
+  '@contextgit/core@0.0.11':
+    resolution: {integrity: sha512-mHZkaizFv7y8J3pfYIBhlotx4vFXapwPpohRecaYKjo32umPamuUbdJVq2hVcJDZkng59VGTzYGNUedC1cCl+w==}
+
+  '@contextgit/core@0.0.8':
+    resolution: {integrity: sha512-NbzRO4/PXqL6HXAI65eQTqhWzp+M36GsHnKzY3Grx3MLpTBj5VTshwNYY/aMjAVICUL3H3LKu8CJNXc0Mx8uqQ==}
+
+  '@contextgit/store@0.0.11':
+    resolution: {integrity: sha512-PJWqo/qHfbl9kHvxqfeDYZJ/B4pvxVjOQ/ZzfmKqg8JcT7cA1HbKdITBXGn0M96r7lOijhgdW4x8BZWSgYPh2w==}
+
+  '@contextgit/store@0.0.8':
+    resolution: {integrity: sha512-h56VDqcN4urIbZg2wa3NKRTdBxb2Z8zDYu9FE/oUXm9Tnbu2RTNaA4w8nYKdy72fq7ykbCqesSGyjZKUWSsoRA==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -496,6 +514,30 @@ packages:
   '@sinclair/typebox@0.27.10':
     resolution: {integrity: sha512-MTBk/3jGLNB2tVxv6uLlFh1iu64iYOQ2PbdOSK3NW8JZsmlaOh2q6sdtKowBhfw8QFLmYNzTW4/oK4uATIi6ZA==}
 
+  '@supabase/auth-js@2.99.2':
+    resolution: {integrity: sha512-uRGNXMKEw4VhwouNW7N0XDAGqJP9redHNDmWi17dTrcO1lvFfyRiXsqqfgnVC8aqtRn8kLkLPEzHjiRWsni+oQ==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/functions-js@2.99.2':
+    resolution: {integrity: sha512-xuXQARvjdfB1UPK1yUceZ5EGjOLkVz4rBAaloS9foXiAuseWEdgWBCxkIAFRxGBLGX8Uzo8kseq90jhPb+07Vg==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/postgrest-js@2.99.2':
+    resolution: {integrity: sha512-ueiOVkbkTQ7RskwVmjR8zxWYw3VKOMxo1+qep+Dx/SgApqyhWBGd92waQb45tbLc7ydB5x8El8utXOLQTuTojQ==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/realtime-js@2.99.2':
+    resolution: {integrity: sha512-J6Jm9601dkpZf3+EJ48ki2pM4sFtCNm/BI0l8iEnrczgg+JSEQkMoOW5VSpM54t0pNs69bsz5PTmYJahDZKiIQ==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/storage-js@2.99.2':
+    resolution: {integrity: sha512-V/FF8kX8JGSefsVCG1spCLSrHdNR/JFeUMn1jS9KG/Eizjx+evtdKQKLJXFgIylY/bKTXKhc2SYDPIGrIhzsug==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/supabase-js@2.99.2':
+    resolution: {integrity: sha512-179rn5wq0wBAqqGwAwR7TUGg2NOaP+fkd5FCVbYJXby85fsRNPFoNJN8YRBepqX2tN7JJcnTjqaAMXuNjiyisA==}
+    engines: {node: '>=20.0.0'}
+
   '@types/better-sqlite3@7.6.13':
     resolution: {integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==}
 
@@ -535,6 +577,9 @@ packages:
   '@types/node@20.19.37':
     resolution: {integrity: sha512-8kzdPJ3FsNsVIurqBs7oodNnCEVbni9yUEkaHbgptDACOPW04jimGagZ51E6+lXUwJjgnBw+hyko/lkFWCldqw==}
 
+  '@types/phoenix@1.6.7':
+    resolution: {integrity: sha512-oN9ive//QSBkf19rfDv45M7eZPi0eEXylht2OLEXicu5b4KoQ1OzXIw+xDSGWxSxe1JmepRR/ZH283vsu518/Q==}
+
   '@types/qs@6.15.0':
     resolution: {integrity: sha512-JawvT8iBVWpzTrz3EGw9BTQFg3BQNmwERdKE22vlTxawwtbyUSlMppvZYKLZzB5zgACXdXxbD3m1bXaMqP/9ow==}
 
@@ -549,6 +594,9 @@ packages:
 
   '@types/serve-static@1.15.10':
     resolution: {integrity: sha512-tRs1dB+g8Itk72rlSI2ZrW6vZg0YrLI81iQSTkMmOqnqCaNr/8Ek4VwWcN5vZgCYWbg/JJSGBlUaYGAOP73qBw==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@vitest/expect@1.6.1':
     resolution: {integrity: sha512-jXL+9+ZNIJKruofqXuuTClf44eSpcHlgj3CiuNihUF3Ioujtmc0zIa3UJOW5RjDK1YLBJZnWBlPuqhYycLioog==}
@@ -1113,6 +1161,10 @@ packages:
   hyperlinker@1.0.0:
     resolution: {integrity: sha512-Ty8UblRWFEcfSuIaajM34LdPXIhbs1ajEX/BBPv24J+enSVaEVY63xQ6lTO9VRYS5LAoghIG0IDJ+p+IPzKUQQ==}
     engines: {node: '>=4'}
+
+  iceberg-js@0.8.1:
+    resolution: {integrity: sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA==}
+    engines: {node: '>=20.0.0'}
 
   iconv-lite@0.4.24:
     resolution: {integrity: sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA==}
@@ -1730,6 +1782,9 @@ packages:
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
 
+  tslib@2.8.1:
+    resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
   tunnel-agent@0.6.0:
     resolution: {integrity: sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w==}
 
@@ -1873,6 +1928,18 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  ws@8.19.0:
+    resolution: {integrity: sha512-blAT2mjOEIi0ZzruJfIhb3nps74PRWTCz1IjglWEEpQl5XS/UNama6u2/rjFkDDouqr4L67ry+1aGIALViWjDg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   yocto-queue@1.2.2:
     resolution: {integrity: sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==}
     engines: {node: '>=12.20'}
@@ -1898,6 +1965,65 @@ snapshots:
       node-fetch: 2.7.0
     transitivePeerDependencies:
       - encoding
+
+  '@contextgit/api@0.0.11':
+    dependencies:
+      '@contextgit/core': 0.0.11
+      '@contextgit/store': 0.0.11
+      express: 4.22.1
+      simple-git: 3.32.3
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+      - supports-color
+
+  '@contextgit/core@0.0.11':
+    dependencies:
+      '@anthropic-ai/sdk': 0.40.1
+      '@xenova/transformers': 2.17.2
+      nanoid: 5.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+
+  '@contextgit/core@0.0.8':
+    dependencies:
+      '@anthropic-ai/sdk': 0.40.1
+      '@xenova/transformers': 2.17.2
+      nanoid: 5.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+
+  '@contextgit/store@0.0.11':
+    dependencies:
+      '@contextgit/core': 0.0.11
+      better-sqlite3: 9.6.0
+      nanoid: 5.1.6
+      sqlite-vec: 0.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
+
+  '@contextgit/store@0.0.8':
+    dependencies:
+      '@contextgit/core': 0.0.8
+      better-sqlite3: 9.6.0
+      nanoid: 5.1.6
+      sqlite-vec: 0.1.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - encoding
+      - react-native-b4a
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
@@ -2153,6 +2279,44 @@ snapshots:
 
   '@sinclair/typebox@0.27.10': {}
 
+  '@supabase/auth-js@2.99.2':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/functions-js@2.99.2':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/postgrest-js@2.99.2':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/realtime-js@2.99.2':
+    dependencies:
+      '@types/phoenix': 1.6.7
+      '@types/ws': 8.18.1
+      tslib: 2.8.1
+      ws: 8.19.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@supabase/storage-js@2.99.2':
+    dependencies:
+      iceberg-js: 0.8.1
+      tslib: 2.8.1
+
+  '@supabase/supabase-js@2.99.2':
+    dependencies:
+      '@supabase/auth-js': 2.99.2
+      '@supabase/functions-js': 2.99.2
+      '@supabase/postgrest-js': 2.99.2
+      '@supabase/realtime-js': 2.99.2
+      '@supabase/storage-js': 2.99.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@types/better-sqlite3@7.6.13':
     dependencies:
       '@types/node': 20.19.37
@@ -2205,6 +2369,8 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/phoenix@1.6.7': {}
+
   '@types/qs@6.15.0': {}
 
   '@types/range-parser@1.2.7': {}
@@ -2223,6 +2389,10 @@ snapshots:
       '@types/http-errors': 2.0.5
       '@types/node': 20.19.37
       '@types/send': 0.17.6
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 20.19.37
 
   '@vitest/expect@1.6.1':
     dependencies:
@@ -2885,6 +3055,8 @@ snapshots:
       ms: 2.1.3
 
   hyperlinker@1.0.0: {}
+
+  iceberg-js@0.8.1: {}
 
   iconv-lite@0.4.24:
     dependencies:
@@ -3561,6 +3733,8 @@ snapshots:
 
   tr46@0.0.3: {}
 
+  tslib@2.8.1: {}
+
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
@@ -3688,6 +3862,8 @@ snapshots:
       strip-ansi: 6.0.1
 
   wrappy@1.0.2: {}
+
+  ws@8.19.0: {}
 
   yocto-queue@1.2.2: {}
 
