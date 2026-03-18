@@ -141,6 +141,14 @@ function parseAgent(row: Row): Agent {
 
 // ─── SupabaseStore ────────────────────────────────────────────────────────────
 
+function msSince(date: Date): string {
+  const ms = Date.now() - date.getTime()
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
+  const hours = Math.floor(minutes / 60)
+  return `${hours} hour${hours !== 1 ? 's' : ''} ago`
+}
+
 const snapshotFormatter = new SnapshotFormatter()
 
 export class SupabaseStore implements ContextStore {
@@ -520,6 +528,20 @@ export class SupabaseStore implements ContextStore {
   // ── Claims ────────────────────────────────────────────────────────────────
 
   async claimTask(projectId: string, branchId: string, input: ClaimInput): Promise<Claim> {
+    // Use listActiveClaims (RPC-backed, TTL-aware) to check for conflicts.
+    // This reuses the already-tested TTL expiry path and avoids duplicating
+    // the SQL `claimed_at + (ttl || ' milliseconds')::interval > NOW()` logic.
+    const active = await this.listActiveClaims(projectId)
+    const conflict = active.find(c => c.task === input.task)
+
+    if (conflict) {
+      throw new Error(
+        `Task "${input.task}" is already claimed by ${conflict.agentId} ` +
+        `(claimed ${msSince(conflict.claimedAt)}). ` +
+        `Pick a different task or wait for the claim to expire.`
+      )
+    }
+
     const id = nanoid()
     const row = await this.q(
       this.db.from('claims').insert({
