@@ -91,6 +91,39 @@ export default class DoctorCmd extends Command {
       'Add contextgit to mcpServers in ~/.claude.json',
     )
 
+    // ── 6. Supabase remote ────────────────────────────────────────────────────
+    const supabaseUrl = config?.supabaseUrl as string | undefined
+    if (!supabaseUrl) {
+      // Not an error — Supabase is optional
+      this.log('  [ ] Supabase: not configured (optional)')
+    } else {
+      const serviceKey = process.env['SUPABASE_SERVICE_KEY']
+      if (!serviceKey) {
+        check(
+          'Supabase: URL set but SUPABASE_SERVICE_KEY missing',
+          false,
+          'Set SUPABASE_SERVICE_KEY in your shell or Claude Code env config',
+        )
+      } else {
+        // Probe connectivity: any 2xx/3xx = connected, 401 = key rejected
+        try {
+          const res = await fetch(`${supabaseUrl}/rest/v1/projects?limit=1`, {
+            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+          })
+          if (res.status === 401) {
+            check('Supabase: reachable but SUPABASE_SERVICE_KEY rejected', false,
+              'Check SUPABASE_SERVICE_KEY — it may be the anon key instead of the service role key')
+          } else if (res.status < 400) {
+            check('Supabase: connected', true)
+          } else {
+            check(`Supabase: HTTP ${res.status}`, false, `Check ${supabaseUrl} is reachable`)
+          }
+        } catch (err) {
+          check('Supabase: unreachable', false, `${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+    }
+
     // ── Summary ───────────────────────────────────────────────────────────────
     this.log('')
     this.log(`${passed} passed, ${failed} failed`)
