@@ -233,6 +233,7 @@ export interface ContextGitConfig {
   projectId: string
   store: 'local' | string      // 'local' or remote URL
   remote?: string              // remote ContextGit API URL for push/pull
+  supabaseUrl?: string          // Supabase project URL for push/pull
   agentRole: AgentRole
   workflowType: WorkflowType
   autoSnapshot: boolean
