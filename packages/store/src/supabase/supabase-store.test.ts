@@ -302,6 +302,70 @@ describe('SupabaseStore', () => {
     await expect(store.unclaimTask('claim1')).resolves.toBeUndefined()
   })
 
+  it('claimTask throws when same task is already actively claimed', async () => {
+    const existingClaim = {
+      id: 'claim-existing',
+      project_id: 'proj-1',
+      branch_id: 'branch-1',
+      task: 'Story 7.1',
+      agent_id: 'dev-a-machine',
+      role: 'solo',
+      status: 'active',
+      ttl: 7_200_000,
+      claimed_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(), // 3 minutes ago
+      released_at: null,
+      thread_id: null,
+    }
+    mockDb.rpc.mockResolvedValueOnce({ data: [existingClaim], error: null })
+
+    await expect(
+      store.claimTask('proj-1', 'branch-1', {
+        task: 'Story 7.1',
+        agentId: 'dev-b-machine',
+        role: 'solo',
+        status: 'active',
+        ttl: 7_200_000,
+      })
+    ).rejects.toThrow('already claimed by dev-a-machine')
+  })
+
+  it('claimTask succeeds when no active claim exists for the task', async () => {
+    // listActiveClaims: rpc returns empty list (no conflicts)
+    mockDb.rpc.mockResolvedValueOnce({ data: [], error: null })
+
+    // INSERT chain: from → insert → select → single
+    const newClaimRow = {
+      id: 'claim-new',
+      project_id: 'proj-1',
+      branch_id: 'branch-1',
+      task: 'Story 7.1',
+      agent_id: 'dev-b-machine',
+      role: 'solo',
+      status: 'active',
+      ttl: 7_200_000,
+      claimed_at: new Date().toISOString(),
+      released_at: null,
+      thread_id: null,
+    }
+    mockDb.from.mockReturnValueOnce({
+      insert: () => ({
+        select: () => ({
+          single: () => ({ data: newClaimRow, error: null }),
+        }),
+      }),
+    })
+
+    const claim = await store.claimTask('proj-1', 'branch-1', {
+      task: 'Story 7.1',
+      agentId: 'dev-b-machine',
+      role: 'solo',
+      status: 'active',
+      ttl: 7_200_000,
+    })
+    expect(claim.task).toBe('Story 7.1')
+    expect(claim.agentId).toBe('dev-b-machine')
+  })
+
   // ── Delta ─────────────────────────────────────────────────────────────────
 
   it('getContextDelta filters by since using ISO string, strictly greater than', async () => {
