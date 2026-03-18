@@ -189,7 +189,19 @@ export class SupabaseStore implements ContextStore {
 
 **Timestamp parsing** — Supabase returns ISO strings. A local `d(s)` helper (identical pattern to `RemoteStore`) converts to `Date`.
 
-**`createCommit`** — `CommitInput` carries `branchId` but not `projectId`. `SupabaseStore.createCommit` resolves `projectId` by first calling `getBranch(branchId)` to get the branch row, then uses `branch.projectId` for the `project_id` column. This adds one round-trip per commit insert, which is acceptable for a push/pull sync target.
+**`createCommit`** — `CommitInput` carries `branchId` but not `projectId`. `SupabaseStore` maintains a per-instance `Map<string, string>` (branchId → projectId) cache. `createCommit` checks the cache first; on miss it fetches the branch row and populates the cache. During a batch push all commits on the same branch pay one lookup — never N round-trips for N commits.
+
+```typescript
+private readonly branchProjectCache = new Map<string, string>()
+
+private async resolveProjectId(branchId: string): Promise<string> {
+  if (this.branchProjectCache.has(branchId)) return this.branchProjectCache.get(branchId)!
+  const branch = await this.getBranch(branchId)
+  if (!branch) throw new Error(`Branch not found: ${branchId}`)
+  this.branchProjectCache.set(branchId, branch.projectId)
+  return branch.projectId
+}
+```
 
 **`indexEmbedding`** — updates `commits.embedding` in place:
 ```typescript
