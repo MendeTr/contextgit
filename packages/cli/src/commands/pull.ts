@@ -94,7 +94,8 @@ export default class PullCmd extends Command {
 
       // Pull missing commits from remote
       const remoteCommits = await allCommits(remote, branch.id)
-      const missing = remoteCommits.filter(c => !localCommitIds.has(c.id))
+      // Reverse to pull oldest-first — parent_id FK requires parent to exist before child
+      const missing = remoteCommits.filter(c => !localCommitIds.has(c.id)).reverse()
 
       if (missing.length === 0) {
         this.log(`[branch] ${branch.name}: up to date (${remoteCommits.length} commits)`)
