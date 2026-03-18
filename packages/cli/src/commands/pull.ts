@@ -7,14 +7,16 @@
 //   3. For each branch: collect remote commits not present locally, write them
 
 import { Command, Flags } from '@oclif/core'
-import { LocalStore, RemoteStore } from '@contextgit/store'
+import { LocalStore } from '@contextgit/store'
+import type { ContextStore } from '@contextgit/store'
 import type { Pagination } from '@contextgit/core'
 import { loadConfig } from '../config.js'
+import { resolveRemoteStore } from '../lib/remote-store.js'
 
 const PAGE = 100
 
 async function allCommits(
-  store: LocalStore | RemoteStore,
+  store: ContextStore,
   branchId: string,
 ): Promise<import('@contextgit/core').Commit[]> {
   const acc: import('@contextgit/core').Commit[] = []
@@ -49,21 +51,14 @@ export default class PullCmd extends Command {
     const { flags } = await this.parse(PullCmd)
     const config = loadConfig()
 
-    const remoteUrl = flags.remote ?? config.remote
-    if (!remoteUrl) {
-      this.error(
-        'No remote configured. Add "remote": "<url>" to .contextgit/config.json or pass --remote.',
-      )
-    }
-
     const local = new LocalStore(config.projectId)
-    const remote = new RemoteStore(remoteUrl)
+    const remote = resolveRemoteStore(config, flags.remote)
     const dryRun = flags['dry-run']
 
     // Verify project exists on remote
     const remoteProject = await remote.getProject(config.projectId).catch(() => null)
     if (!remoteProject) {
-      this.error(`Project ${config.projectId} not found on remote ${remoteUrl}. Push first.`)
+      this.error(`Project ${config.projectId} not found on remote. Push first.`)
     }
 
     // List all remote branches
@@ -140,6 +135,6 @@ export default class PullCmd extends Command {
       }
     }
 
-    this.log(`\nDone. ${dryRun ? '(dry run) ' : ''}${totalPulled} commit(s), ${missingThreads.length} thread(s) pulled from ${remoteUrl}`)
+    this.log(`\nDone. ${dryRun ? '(dry run) ' : ''}${totalPulled} commit(s), ${missingThreads.length} thread(s) pulled.`)
   }
 }
