@@ -22,10 +22,10 @@ importers:
     dependencies:
       '@contextgit/core':
         specifier: 0.0.11
-        version: 0.0.11
+        version: link:../core
       '@contextgit/store':
         specifier: 0.0.11
-        version: 0.0.11
+        version: link:../store
       express:
         specifier: ^4.19.0
         version: 4.22.1
@@ -47,13 +47,13 @@ importers:
     dependencies:
       '@contextgit/api':
         specifier: 0.0.11
-        version: 0.0.11
+        version: link:../api
       '@contextgit/core':
         specifier: 0.0.11
-        version: 0.0.11
+        version: link:../core
       '@contextgit/store':
         specifier: 0.0.11
-        version: 0.0.11
+        version: link:../store
       '@oclif/core':
         specifier: ^3.27.0
         version: 3.27.0
@@ -96,11 +96,11 @@ importers:
   packages/mcp:
     dependencies:
       '@contextgit/core':
-        specifier: 0.0.8
-        version: 0.0.8
+        specifier: 0.0.11
+        version: link:../core
       '@contextgit/store':
-        specifier: 0.0.8
-        version: 0.0.8
+        specifier: 0.0.11
+        version: link:../store
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(zod@3.25.76)
@@ -122,7 +122,7 @@ importers:
     dependencies:
       '@contextgit/core':
         specifier: 0.0.11
-        version: 0.0.11
+        version: link:../core
       '@supabase/supabase-js':
         specifier: ^2.99.2
         version: 2.99.2
@@ -153,21 +153,6 @@ packages:
 
   '@anthropic-ai/sdk@0.40.1':
     resolution: {integrity: sha512-DJMWm8lTEM9Lk/MSFL+V+ugF7jKOn0M2Ujvb5fN8r2nY14aHbGPZ1k6sgjL+tpJ3VuOGJNG+4R83jEpOuYPv8w==}
-
-  '@contextgit/api@0.0.11':
-    resolution: {integrity: sha512-97V7o+NTJFZyVlpFk/pCNZ1qOlR+91fj1mOQSpjZDnzyQKwOQNd/OxNOcLP04UvMrZF6wT/1qLKAnWwDAreRpA==}
-
-  '@contextgit/core@0.0.11':
-    resolution: {integrity: sha512-mHZkaizFv7y8J3pfYIBhlotx4vFXapwPpohRecaYKjo32umPamuUbdJVq2hVcJDZkng59VGTzYGNUedC1cCl+w==}
-
-  '@contextgit/core@0.0.8':
-    resolution: {integrity: sha512-NbzRO4/PXqL6HXAI65eQTqhWzp+M36GsHnKzY3Grx3MLpTBj5VTshwNYY/aMjAVICUL3H3LKu8CJNXc0Mx8uqQ==}
-
-  '@contextgit/store@0.0.11':
-    resolution: {integrity: sha512-PJWqo/qHfbl9kHvxqfeDYZJ/B4pvxVjOQ/ZzfmKqg8JcT7cA1HbKdITBXGn0M96r7lOijhgdW4x8BZWSgYPh2w==}
-
-  '@contextgit/store@0.0.8':
-    resolution: {integrity: sha512-h56VDqcN4urIbZg2wa3NKRTdBxb2Z8zDYu9FE/oUXm9Tnbu2RTNaA4w8nYKdy72fq7ykbCqesSGyjZKUWSsoRA==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -1965,65 +1950,6 @@ snapshots:
       node-fetch: 2.7.0
     transitivePeerDependencies:
       - encoding
-
-  '@contextgit/api@0.0.11':
-    dependencies:
-      '@contextgit/core': 0.0.11
-      '@contextgit/store': 0.0.11
-      express: 4.22.1
-      simple-git: 3.32.3
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - encoding
-      - react-native-b4a
-      - supports-color
-
-  '@contextgit/core@0.0.11':
-    dependencies:
-      '@anthropic-ai/sdk': 0.40.1
-      '@xenova/transformers': 2.17.2
-      nanoid: 5.1.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - encoding
-      - react-native-b4a
-
-  '@contextgit/core@0.0.8':
-    dependencies:
-      '@anthropic-ai/sdk': 0.40.1
-      '@xenova/transformers': 2.17.2
-      nanoid: 5.1.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - encoding
-      - react-native-b4a
-
-  '@contextgit/store@0.0.11':
-    dependencies:
-      '@contextgit/core': 0.0.11
-      better-sqlite3: 9.6.0
-      nanoid: 5.1.6
-      sqlite-vec: 0.1.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - encoding
-      - react-native-b4a
-
-  '@contextgit/store@0.0.8':
-    dependencies:
-      '@contextgit/core': 0.0.8
-      better-sqlite3: 9.6.0
-      nanoid: 5.1.6
-      sqlite-vec: 0.1.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - encoding
-      - react-native-b4a
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
