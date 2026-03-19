@@ -10,7 +10,7 @@
     "contextgit": "./packages/cli/bin/run.js"
   },
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @contextgit/core build && pnpm --filter @contextgit/store build && pnpm --filter @contextgit/api build && pnpm --filter @contextgit/mcp build && pnpm --filter contextgit build",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "lint": "pnpm -r lint",
