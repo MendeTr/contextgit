@@ -6,5 +6,6 @@
   "workflowType": "interactive",
   "autoSnapshot": true,
   "snapshotInterval": 10,
-  "embeddingModel": "local"
+  "embeddingModel": "local",
+  "supabaseUrl": "https://xhedrauhcqkndouykmfi.supabase.co"
 }

@@ -12,11 +12,13 @@ Branch: main
 Clone: git clone https://github.com/MendeTr/contextgit
 
 ## Session Start (do this every time)
-Call context_get with scope=global immediately.
+Call project_memory_load (or context_get) with scope=global immediately.
 Do not read decisions.md. Do not ask questions first.
 Read the snapshot. Then start working.
-Do not ask what to work on. Start the highest priority item from the snapshot.
-If unclear, follow the Phase 2 plan: docs/ContextGit_PHASE2_PLAN.md
+Do not ask what to work on. Start the next specific task from the snapshot.
+Start the next specific task — not an entire feature or milestone.
+One task per session unless it is trivially small.
+If unclear, follow the current plan in the snapshot or docs/.
 
 ## What counts as a completed task (commit after EACH of these)
 - One file edited with a schema/DDL change
@@ -32,22 +34,33 @@ Do NOT batch multiple steps into one commit. One step = one commit.
 If you are working from a numbered plan, each numbered step = one commit.
 
 ## After EVERY completed task
-```bash
-pnpm build
-git add .
-git commit -m "feat/fix: <what was done>"
-git push
-```
-Then immediately:
-```
-context_commit "what was built | key decisions | next task"
-```
 
-Do not wait to be asked. Every completed task = immediate commit.
-Do not proceed to the next step until the current step is committed.
+Do not wait to be asked. Every git commit = immediate context commit.
+Do not proceed to the next task until both are done.
+
+1. `git add . && git commit -m "feat/fix: <what was done>"`
+2. Call `project_memory_save` immediately after with:
+   - One-line summary of what was done
+   - What was decided and why
+   - What was built (files changed, approach taken)
+   - Open questions
+   - Git branch and commit hash
+   - The next concrete task
+
+These two always go together. Never git commit without a context commit.
+After each git commit, IMMEDIATELY call project_memory_save before writing any code for the next task.
+Failure mode to avoid: batching multiple git commits before calling project_memory_save once.
+
+## Commit Pairing Check
+
+Before starting any new task, verify:
+- Last git commit has a matching project_memory_save
+- project_memory_save was called AFTER the git commit, not before
+
+If using executing-plans or subagent-driven-development skills, each numbered plan step = one git commit + one project_memory_save, in that order, before the next step begins.
 
 ## Session End (do this every time)
-Call context_commit with:
+Call project_memory_save (or context_commit) with:
 - what was built
 - key decisions and why
 - open threads
@@ -60,11 +73,13 @@ git commit -m "<type>: <summary>"
 git push
 ```
 
+Do not end a session without a context commit. The next session starts blind without it.
+
 ## When scope changes mid-session
-1. Write a context_commit with replan: prefix immediately:
-   `context_commit "replan: <what changed and why. what is new scope. what is no longer in scope>"`
+1. Write a project_memory_save with replan: prefix immediately:
+   `project_memory_save "replan: <what changed and why. what is new scope. what is no longer in scope>"`
 2. Then build the new scope
-3. Write a normal context_commit when done
+3. Write a normal context commit when done
 
 Do not build first and replan after. Replan commit must come first.
 Other agents are reading the snapshot in real time.
@@ -104,10 +119,10 @@ api → core, store, express
 
 ### Packages
 - **`@contextgit/core`** — types, engine, summarizer, snapshot formatter, embeddings
-- **`@contextgit/store`** — ContextStore interface + LocalStore (SQLite)
-- **`packages/mcp`** — MCP server (Week 3)
-- **`packages/cli`** — oclif CLI (Week 3)
-- **`packages/api`** — Express REST API (Week 4)
+- **`@contextgit/store`** — ContextStore interface + LocalStore (SQLite) + SupabaseStore (Postgres + pgvector)
+- **`packages/mcp`** — MCP server
+- **`packages/cli`** — oclif CLI
+- **`packages/api`** — Express REST API
 
 ### Storage layer (`packages/store/src/local/`)
 | File | Role |
@@ -142,7 +157,7 @@ Root vitest config collects `packages/*/src/**/*.test.ts`.
 
 ## Key Docs
 - `docs/decisions.md` — session history (read this first)
-- `docs/ContextGit_PHASE2_PLAN.md` — current build plan
-- `docs/ContextGit_DELTA_multiagent.md` — active delta spec (build this next)
+- `docs/ContextGit_PHASE2_PLAN.md` — Phase 2 build plan (completed)
+- `docs/ContextGit_DELTA_multiagent.md` — multi-agent delta spec
 - `docs/ContextGit_ARCHITECTURE_v3.md` — full architecture
 - `docs/ContextGit_PRD_v4.md` — product requirements
