@@ -108,7 +108,9 @@ async function bootstrap(): Promise<ServerContext> {
   let claimsStore: ContextStore = store  // default: same as primary store
 
   if (config.supabaseUrl) {
-    const key = process.env['SUPABASE_SERVICE_KEY']
+    // Env var is preferred; fall back to config file for VS Code extension
+    // env injection bug (https://github.com/anthropics/claude-code/issues/28090)
+    const key = process.env['SUPABASE_SERVICE_KEY'] ?? config.supabaseServiceKey
     if (key) {
       claimsStore = new SupabaseStore(config.supabaseUrl, key)
     }
