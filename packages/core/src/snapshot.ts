@@ -45,6 +45,16 @@ export class SnapshotFormatter {
         ``,
         `## Open Threads`,
         threads || '(none)',
+        ``,
+        `## Active Claims`,
+        activeClaims.length
+          ? activeClaims
+              .map(
+                (cl) =>
+                  `- [CLAIMED by ${cl.agentId}] ${cl.task} (claimed ${cl.claimedAt.toISOString()})`,
+              )
+              .join('\n')
+          : '(none)',
       ].join('\n')
     }
 
@@ -74,6 +84,16 @@ export class SnapshotFormatter {
       ``,
       `=== OPEN THREADS ===`,
       threads || '(none)',
+      ``,
+      `=== ACTIVE CLAIMS ===`,
+      activeClaims.length
+        ? activeClaims
+            .map(
+              (cl) =>
+                `- [CLAIMED by ${cl.agentId}] ${cl.task} (claimed ${cl.claimedAt.toISOString()})`,
+            )
+            .join('\n')
+        : '(none)',
     ].join('\n')
   }
 }
