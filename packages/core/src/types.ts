@@ -234,6 +234,7 @@ export interface ContextGitConfig {
   store: 'local' | string      // 'local' or remote URL
   remote?: string              // remote ContextGit API URL for push/pull
   supabaseUrl?: string          // Supabase project URL for push/pull
+  supabaseServiceKey?: string   // Fallback when SUPABASE_SERVICE_KEY env var is not injected (VS Code extension bug)
   agentRole: AgentRole
   workflowType: WorkflowType
   autoSnapshot: boolean
