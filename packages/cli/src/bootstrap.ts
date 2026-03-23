@@ -1,12 +1,12 @@
 // bootstrap.ts — shared setup for commit/context commands.
 // Loads config, opens LocalStore, detects git branch, initializes ContextEngine.
 
-import os from 'os'
 import { simpleGit } from 'simple-git'
 import { ContextEngine } from '@contextgit/core'
 import { LocalStore, RemoteStore } from '@contextgit/store'
 import type { ContextStore } from '@contextgit/store'
 import { loadConfig } from './config.js'
+import { getCliAgentId } from './agent-id.js'
 
 export interface CliContext {
   engine: ContextEngine
@@ -52,8 +52,7 @@ export async function bootstrap(): Promise<CliContext> {
   const gitBranch = await detectGitBranch()
   const branchId = await resolveContextBranch(store, projectId, gitBranch)
 
-  const hostname = os.hostname()
-  const agentId = `${hostname}-cli-interactive`
+  const agentId = getCliAgentId()
 
   const engine = new ContextEngine(
     store,

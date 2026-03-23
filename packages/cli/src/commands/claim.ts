@@ -3,6 +3,7 @@
 import { Command, Args, Flags } from '@oclif/core'
 import { LocalStore } from '@contextgit/store'
 import { loadConfig } from '../config.js'
+import { getCliAgentId } from '../agent-id.js'
 
 export default class ClaimCmd extends Command {
   static description = 'Claim a task to prevent other agents from picking it up simultaneously'
@@ -45,7 +46,8 @@ export default class ClaimCmd extends Command {
       this.error('No branch found. Run contextgit init first.')
     }
 
-    const agentId = flags['for-agent-id'] ?? `cli-${process.env.USER ?? 'unknown'}`
+    // Use shared agent ID so claims match commits for auto-release
+    const agentId = flags['for-agent-id'] ?? getCliAgentId()
 
     const claim = await store.claimTask(config.projectId, activeBranch.id, {
       task: args.task,
