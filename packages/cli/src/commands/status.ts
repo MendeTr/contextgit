@@ -32,6 +32,7 @@ export default class StatusCmd extends Command {
     const commits = await store.listCommits(branch.id, { limit: 5, offset: 0 })
     const agents = await store.listAgents(config.projectId)
     const allBranches = await store.listBranches(config.projectId)
+    const activeClaims = await store.listActiveClaims(config.projectId)
 
     this.log(`Project:  ${config.project}  (${config.projectId})`)
     this.log(`Branch:   ${branch.name}  [${branch.status}]`)
@@ -43,11 +44,27 @@ export default class StatusCmd extends Command {
     this.log(`Commits:  ${commits.length} recent (showing last 5)`)
     this.log(`Threads:  ${threads.length} open`)
     this.log(`Agents:   ${agents.length} registered`)
+    this.log(`Claims:   ${activeClaims.length} active`)
+
+    if (activeClaims.length > 0) {
+      this.log('\nActive claims:')
+      for (const c of activeClaims) {
+        const ttlHours = Math.round(c.ttl / 3_600_000)
+        this.log(`  [${c.id.slice(0, 8)}] "${c.task}" by ${c.agentId} (${c.status}, ${ttlHours}h TTL)`)
+      }
+    }
 
     if (threads.length > 0) {
       this.log('\nOpen threads:')
       for (const t of threads) {
-        this.log(`  [${t.id.slice(0, 8)}] ${t.description}`)
+        // Show inline claim status on threads
+        const claim = activeClaims.find(c =>
+          c.threadId === t.id ||
+          t.description.toLowerCase().includes(c.task.toLowerCase()) ||
+          c.task.toLowerCase().includes(t.description.toLowerCase())
+        )
+        const claimTag = claim ? ` [CLAIMED by ${claim.agentId}]` : ' [FREE]'
+        this.log(`  [${t.id.slice(0, 8)}]${claimTag} ${t.description}`)
       }
     }
 
@@ -58,5 +75,7 @@ export default class StatusCmd extends Command {
         this.log(`  [${c.id.slice(0, 8)}] ${c.message}  (${ts})`)
       }
     }
+
+    store.close()
   }
 }

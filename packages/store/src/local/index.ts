@@ -40,6 +40,16 @@ import { Queries } from './queries.js'
 
 const snapshotFormatter = new SnapshotFormatter()
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function msSince(date: Date): string {
+  const ms = Date.now() - date.getTime()
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
+  const hours = Math.floor(minutes / 60)
+  return `${hours} hour${hours !== 1 ? 's' : ''} ago`
+}
+
 // ─── LocalStore ───────────────────────────────────────────────────────────────
 
 export class LocalStore implements ContextStore {
@@ -349,6 +359,17 @@ export class LocalStore implements ContextStore {
 
   claimTask(projectId: string, branchId: string, input: ClaimInput): Promise<Claim> {
     try {
+      // Check for existing active claim on the same task (matches SupabaseStore behavior)
+      const active = this.q.listActiveClaims(projectId)
+      const conflict = active.find(c => c.task === input.task)
+      if (conflict) {
+        throw new Error(
+          `Task "${input.task}" is already claimed by ${conflict.agentId} ` +
+          `(claimed ${msSince(conflict.claimedAt)}). ` +
+          `Pick a different task or wait for the claim to expire.`
+        )
+      }
+
       return Promise.resolve(this.q.insertClaim(nanoid(), projectId, branchId, input))
     } catch (e) {
       return Promise.reject(e)
@@ -391,4 +412,3 @@ export class LocalStore implements ContextStore {
     this.db.close()
   }
 }
-
