@@ -6,10 +6,10 @@ import { createInterface } from 'readline'
 import { join, basename } from 'path'
 import { nanoid } from 'nanoid'
 import { simpleGit } from 'simple-git'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
-import { writeClaude, writeSkills, registerMcp } from '../lib/init-helpers.js'
+import { writeClaude, writeSkills, registerMcp, patchGitignore } from '../lib/init-helpers.js'
 
 export default class Init extends Command {
   static description = 'Initialize ContextGit in this project'
@@ -44,7 +44,7 @@ export default class Init extends Command {
         this.error('Found .contextgit/config.json but could not parse it. Delete it and re-run init.')
       }
 
-      const store = new LocalStore(existing.projectId)
+      const store = new LocalStore(existing.projectId, resolveDbPath(existing.projectId, configDir))
       const gitBranch = await detectGitBranch(cwd)
       const branch = await store.getBranchByGitName(existing.projectId, gitBranch)
 
@@ -70,6 +70,11 @@ export default class Init extends Command {
           this.log(`✅ MCP server registered        (~/.claude.json)`)
         }
 
+        const gitignoreResult = patchGitignore(cwd)
+        if (gitignoreResult.status === 'patched' || gitignoreResult.status === 'created') {
+          this.log(`✅ .gitignore updated           (context DB committed to git)`)
+        }
+
         this.log('ContextGit already initialized. Config found at .contextgit/config.json')
         return
       }
@@ -87,6 +92,10 @@ export default class Init extends Command {
         installGitHooks(cwd)
         this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
       }
+      const gitignoreResultRecreate = patchGitignore(cwd)
+      if (gitignoreResultRecreate.status === 'patched' || gitignoreResultRecreate.status === 'created') {
+        this.log(`✅ .gitignore updated           (context DB committed to git)`)
+      }
       return
     }
 
@@ -94,7 +103,7 @@ export default class Init extends Command {
     const projectName = flags.name ?? basename(cwd)
     const projectId = nanoid()
 
-    const store = new LocalStore(projectId)
+    const store = new LocalStore(projectId, resolveDbPath(projectId, configDir))
     await store.createProject({ id: projectId, name: projectName })
 
     const gitBranch = await detectGitBranch(cwd)
@@ -122,6 +131,14 @@ export default class Init extends Command {
     this.log(`   ID:       ${projectId}`)
     this.log(`   Branch:   ${gitBranch}`)
     this.log(``)
+
+    // ── Patch .gitignore ───────────────────────────────────────────────────────
+    const gitignoreResult = patchGitignore(cwd)
+    if (gitignoreResult.status === 'patched' || gitignoreResult.status === 'created') {
+      this.log(`✅ .gitignore updated           (context DB committed to git)`)
+    } else {
+      this.log(`⏭  .gitignore already configured (skipped)`)
+    }
 
     // BUG-3 fix: prompt for hooks unless user was explicit about it
     let installHooks = flags.hooks
