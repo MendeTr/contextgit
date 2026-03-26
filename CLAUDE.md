@@ -161,3 +161,55 @@ Root vitest config collects `packages/*/src/**/*.test.ts`.
 - `docs/ContextGit_DELTA_multiagent.md` — multi-agent delta spec
 - `docs/ContextGit_ARCHITECTURE_v3.md` — full architecture
 - `docs/ContextGit_PRD_v4.md` — product requirements
+<!-- contextgit:start -->
+## ContextGit Memory
+
+This project uses ContextGit for persistent AI memory across sessions.
+
+## Session Start (do this every time)
+
+Call `project_memory_load` immediately.
+Do not ask questions first. Read the snapshot, then start working.
+Start the next specific task from the snapshot — not an entire feature or milestone.
+One task per session unless it is trivially small.
+
+## After EVERY completed task
+
+Do not wait to be asked. Every git commit = immediate context commit.
+Do not proceed to the next task until both are done.
+
+1. `git add . && git commit -m "feat/fix: <what was done>"`
+2. Call `project_memory_save` immediately after with:
+   - One-line summary of what was done
+   - What was decided and why
+   - What was built (files changed, approach taken)
+   - Open questions
+   - Git branch and commit hash
+   - The next concrete task
+
+These two always go together. Never git commit without a context commit.
+
+## Session End (do this every time)
+
+Before stopping work for any reason, call `project_memory_save` with:
+- What was built this session
+- Key decisions and why
+- Open threads and blockers
+- The first concrete task for the next session
+
+Do not end a session without a context commit. The next session starts blind without it.
+
+## Before risky exploration
+
+Call `project_memory_branch` to create an isolated context workspace before trying anything uncertain.
+
+## Before starting a task (multi-agent)
+
+Call `project_task_claim` to prevent other agents from duplicating your work.
+
+## When scope changes mid-session
+
+Write a `project_memory_save` with replan: prefix BEFORE building new scope:
+`project_memory_save "replan: <what changed and why>"`
+Then build the new scope. Then write a normal context commit when done.
+<!-- contextgit:end -->

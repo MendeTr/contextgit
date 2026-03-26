@@ -17,6 +17,9 @@ dist/
 .env
 .env.local
 
+# ContextGit local config (may contain credentials)
+.contextgit/config.json
+
 # OS
 .DS_Store
 Thumbs.db
