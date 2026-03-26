@@ -29,7 +29,7 @@ export function findConfigPath(startDir: string = process.cwd()): string {
   }
 }
 
-export function loadConfig(startDir?: string): ContextGitConfig {
+export function loadConfig(startDir?: string): ContextGitConfig & { configDir: string } {
   const configPath = findConfigPath(startDir)
   const raw = readFileSync(configPath, 'utf-8')
   const config = JSON.parse(raw) as ContextGitConfig
@@ -41,5 +41,5 @@ export function loadConfig(startDir?: string): ContextGitConfig {
     throw new Error(`Invalid config at ${configPath}: missing required field 'project'`)
   }
 
-  return config
+  return { ...config, configDir: dirname(configPath) }
 }
