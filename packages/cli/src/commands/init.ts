@@ -79,15 +79,18 @@ export default class Init extends Command {
         return
       }
 
-      // DB missing or empty — recreate project + branch
-      this.log('Config found but DB is empty — recreating project and branch in DB.')
-      await store.createProject({ id: existing.projectId, name: existing.project })
+      // DB exists (e.g. cloned) or empty — ensure project + branch exist without duplicating
+      const project = await store.getProject(existing.projectId)
+      if (!project) {
+        await store.createProject({ id: existing.projectId, name: existing.project })
+      }
       await store.createBranch({
         projectId: existing.projectId,
         name: `Context: ${gitBranch}`,
         gitBranch,
       })
-      this.log(`Recreated project "${existing.project}" (${existing.projectId}) for branch: ${gitBranch}`)
+      const verb = project ? 'Registered' : 'Recreated'
+      this.log(`${verb} branch for project "${existing.project}" (${existing.projectId}): ${gitBranch}`)
       if (flags.hooks) {
         installGitHooks(cwd)
         this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
