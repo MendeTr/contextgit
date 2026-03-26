@@ -1,6 +1,6 @@
 {
   "name": "@contextgit/api",
-  "version": "0.0.14",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/server.js",
   "exports": {
@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.0.14",
-    "@contextgit/store": "0.0.14",
+    "@contextgit/core": "0.1.0",
+    "@contextgit/store": "0.1.0",
     "express": "^4.19.0",
     "simple-git": "^3.27.0"
   },
