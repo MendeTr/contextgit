@@ -59,18 +59,22 @@ export class LocalStore implements ContextStore {
   /**
    * @param projectId  Used to derive the DB file path.
    *                   Pass ':memory:' for tests.
+   * @param dbPath     Optional explicit database path. If provided, overrides projectId-based computation.
    */
-  constructor(projectId: string) {
-    let dbPath: string
+  constructor(projectId: string, dbPath?: string) {
+    let resolvedPath: string
     if (projectId === ':memory:') {
-      dbPath = ':memory:'
+      resolvedPath = ':memory:'
+    } else if (dbPath !== undefined) {
+      resolvedPath = dbPath
+      // Parent directory must already exist (guaranteed by contextgit init).
     } else {
       const dir = join(homedir(), '.contextgit', 'projects')
       mkdirSync(dir, { recursive: true })
-      dbPath = join(dir, `${projectId}.db`)
+      resolvedPath = join(dir, `${projectId}.db`)
     }
 
-    this.db = new Database(dbPath)
+    this.db = new Database(resolvedPath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('busy_timeout = 5000')
     this.db.pragma('foreign_keys = ON')

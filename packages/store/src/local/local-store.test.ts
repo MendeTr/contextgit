@@ -161,4 +161,12 @@ describe('LocalStore (in-memory)', () => {
     expect(mainThreads).toHaveLength(1)
     expect(mainThreads[0].description).toBe('Thread from feat')
   })
+
+  it('uses explicit dbPath when provided, ignoring projectId for path computation', async () => {
+    // Passing ':memory:' as dbPath bypasses projectId-based path computation entirely.
+    // If projectId were used, it would try to open ~/.contextgit/projects/ignored-id.db.
+    const store2 = new LocalStore('ignored-id', ':memory:')
+    await expect(store2.createProject({ id: 'p1', name: 'Test' })).resolves.toMatchObject({ id: 'p1' })
+    store2.close()
+  })
 })
