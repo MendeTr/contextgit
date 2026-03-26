@@ -13,6 +13,9 @@ dist/
 *.db-shm
 *.db-wal
 
+# ContextGit in-repo context DB — committed to git so context travels with clones
+!.contextgit/context.db
+
 # Environment
 .env
 .env.local
