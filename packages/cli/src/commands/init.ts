@@ -103,6 +103,7 @@ export default class Init extends Command {
     const projectName = flags.name ?? basename(cwd)
     const projectId = nanoid()
 
+    mkdirSync(configDir, { recursive: true })
     const store = new LocalStore(projectId, resolveDbPath(projectId, configDir))
     await store.createProject({ id: projectId, name: projectName })
 
@@ -113,7 +114,6 @@ export default class Init extends Command {
       gitBranch,
     })
 
-    mkdirSync(configDir, { recursive: true })
     const config: ContextGitConfig = {
       project: projectName,
       projectId,
