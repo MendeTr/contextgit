@@ -9,7 +9,7 @@ import { simpleGit } from 'simple-git'
 import { LocalStore, resolveDbPath } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
-import { writeClaude, writeSkills, registerMcp, patchGitignore } from '../lib/init-helpers.js'
+import { writeClaude, writeSkills, registerMcp, patchGitignore, patchClaudeSettings } from '../lib/init-helpers.js'
 
 export default class Init extends Command {
   static description = 'Initialize ContextGit in this project'
@@ -75,6 +75,11 @@ export default class Init extends Command {
           this.log(`✅ .gitignore updated           (context DB committed to git)`)
         }
 
+        const hooksResult = patchClaudeSettings(cwd)
+        if (hooksResult.status === 'patched') {
+          this.log(`✅ Claude hooks installed       (.claude/settings.json)`)
+        }
+
         this.log('ContextGit already initialized. Config found at .contextgit/config.json')
         return
       }
@@ -98,6 +103,10 @@ export default class Init extends Command {
       const gitignoreResultRecreate = patchGitignore(cwd)
       if (gitignoreResultRecreate.status === 'patched' || gitignoreResultRecreate.status === 'created') {
         this.log(`✅ .gitignore updated           (context DB committed to git)`)
+      }
+      const hooksResultRecreate = patchClaudeSettings(cwd)
+      if (hooksResultRecreate.status === 'patched') {
+        this.log(`✅ Claude hooks installed       (.claude/settings.json)`)
       }
       return
     }
@@ -187,6 +196,16 @@ export default class Init extends Command {
     } else {
       this.log(`⚠️  MCP server not registered   (${mcpResult.reason})`)
       this.log(`   Add manually: contextgit-mcp in ~/.claude.json mcpServers`)
+    }
+
+    // ── Install Claude Code hooks ──────────────────────────────────────────────
+    const hooksResult = patchClaudeSettings(cwd)
+    if (hooksResult.status === 'patched') {
+      this.log(`✅ Claude hooks installed       (.claude/settings.json)`)
+    } else if (hooksResult.status === 'already-present') {
+      this.log(`⏭  Claude hooks already configured (skipped)`)
+    } else {
+      this.log(`⚠️  Claude hooks not installed  (${hooksResult.reason})`)
     }
 
     this.log(``)

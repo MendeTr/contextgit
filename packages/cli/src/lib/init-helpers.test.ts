@@ -6,6 +6,7 @@ import {
   writeClaude,
   writeSkills,
   patchGitignore,
+  patchClaudeSettings,
   CLAUDE_MD_SENTINEL_START,
   CLAUDE_MD_SENTINEL_END,
 } from './init-helpers.js'
@@ -92,6 +93,43 @@ describe('writeSkills', () => {
     writeSkills(tmpDir) // first call
     const result = writeSkills(tmpDir) // second call
     expect(result.status).toBe('written')
+  })
+})
+
+// ── patchClaudeSettings ───────────────────────────────────────────────────────
+
+describe('patchClaudeSettings', () => {
+  it('creates .claude/settings.json with both hooks when file does not exist', () => {
+    const result = patchClaudeSettings(tmpDir)
+    expect(result.status).toBe('patched')
+    const settingsPath = join(tmpDir, '.claude', 'settings.json')
+    expect(existsSync(settingsPath)).toBe(true)
+    const json = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+    expect(json.hooks.UserPromptSubmit).toHaveLength(1)
+    expect(json.hooks.UserPromptSubmit[0].hooks[0].command).toContain('project_memory_load')
+    expect(json.hooks.PostToolUse).toHaveLength(1)
+    expect(json.hooks.PostToolUse[0].matcher).toBe('Bash')
+    expect(json.hooks.PostToolUse[0].hooks[0].command).toContain('project_memory_save')
+  })
+
+  it('merges hooks into existing settings.json without overwriting other keys', () => {
+    const settingsPath = join(tmpDir, '.claude', 'settings.json')
+    require('fs').mkdirSync(join(tmpDir, '.claude'), { recursive: true })
+    writeFileSync(settingsPath, JSON.stringify({ permissions: { allow: ['Bash(git:*)'] } }, null, 2))
+    patchClaudeSettings(tmpDir)
+    const json = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+    expect(json.permissions.allow).toContain('Bash(git:*)')
+    expect(json.hooks.UserPromptSubmit).toBeDefined()
+    expect(json.hooks.PostToolUse).toBeDefined()
+  })
+
+  it('is idempotent — returns already-present on second call', () => {
+    patchClaudeSettings(tmpDir)
+    const result = patchClaudeSettings(tmpDir)
+    expect(result.status).toBe('already-present')
+    const json = JSON.parse(readFileSync(join(tmpDir, '.claude', 'settings.json'), 'utf-8'))
+    // hooks not duplicated
+    expect(json.hooks.UserPromptSubmit).toHaveLength(1)
   })
 })
 

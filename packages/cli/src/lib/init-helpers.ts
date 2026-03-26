@@ -220,6 +220,69 @@ export function writeSkills(
   }
 }
 
+// ── Claude Code hooks (.claude/settings.json) ────────────────────────────────
+
+/**
+ * Sentinel that identifies our hooks block inside .claude/settings.json.
+ * If this string is present, the hooks have already been installed.
+ */
+const CLAUDE_HOOKS_SENTINEL = 'project_memory_load'
+
+const CONTEXTGIT_HOOKS = {
+  UserPromptSubmit: [
+    {
+      hooks: [
+        {
+          type: 'command',
+          command:
+            `printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"MANDATORY: Call project_memory_load before doing any work. Do not read files, write code, or answer questions until you have called project_memory_load and read the snapshot."}}'`,
+        },
+      ],
+    },
+  ],
+  PostToolUse: [
+    {
+      matcher: 'Bash',
+      hooks: [
+        {
+          type: 'command',
+          command:
+            `cmd=$(jq -r '.tool_input.command // ""'); if echo "$cmd" | grep -q 'git commit'; then printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"MANDATORY: Call project_memory_save NOW before proceeding to any next task. Every git commit must be paired with project_memory_save immediately after."}}'; fi`,
+        },
+      ],
+    },
+  ],
+}
+
+/**
+ * Merge ContextGit hooks into <projectDir>/.claude/settings.json.
+ * Idempotent — skips if sentinel already present.
+ */
+export function patchClaudeSettings(
+  projectDir: string,
+): { status: 'patched' | 'already-present' | 'error'; reason?: string } {
+  const settingsPath = join(projectDir, '.claude', 'settings.json')
+  try {
+    let json: Record<string, unknown> = {}
+    if (existsSync(settingsPath)) {
+      const raw = readFileSync(settingsPath, 'utf-8')
+      if (raw.includes(CLAUDE_HOOKS_SENTINEL)) return { status: 'already-present' }
+      json = JSON.parse(raw) as Record<string, unknown>
+    }
+
+    const hooks = (json['hooks'] as Record<string, unknown[]> | undefined) ?? {}
+    hooks['UserPromptSubmit'] = [...(hooks['UserPromptSubmit'] ?? []), ...CONTEXTGIT_HOOKS.UserPromptSubmit]
+    hooks['PostToolUse'] = [...(hooks['PostToolUse'] ?? []), ...CONTEXTGIT_HOOKS.PostToolUse]
+    json['hooks'] = hooks
+
+    mkdirSync(join(projectDir, '.claude'), { recursive: true })
+    writeFileSync(settingsPath, JSON.stringify(json, null, 2) + '\n')
+    return { status: 'patched' }
+  } catch (err) {
+    return { status: 'error', reason: String(err) }
+  }
+}
+
 // ── .gitignore ────────────────────────────────────────────────────────────────
 
 /**
