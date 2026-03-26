@@ -4,8 +4,8 @@ import os from 'os'
 import { join, resolve } from 'path'
 import { existsSync, readFileSync } from 'fs'
 import { Command } from '@oclif/core'
-import { LocalStore } from '@contextgit/store'
-import { findConfigPath } from '../config.js'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
+import { loadConfig, findConfigPath } from '../config.js'
 
 const SENTINEL = '# contextgit'
 
@@ -26,21 +26,24 @@ export default class DoctorCmd extends Command {
     }
 
     // ── 1. Config file ────────────────────────────────────────────────────────
-    let configPath: string | null = null
-    let config: Record<string, unknown> | null = null
+    let config: (import('@contextgit/core').ContextGitConfig & { configDir: string }) | null = null
+    let configDir: string | null = null
     try {
-      configPath = findConfigPath(process.cwd())
-      config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+      const loaded = loadConfig(process.cwd())
+      config = loaded
+      configDir = loaded.configDir
       check('Config file found and valid JSON', true)
     } catch {
       check('Config file found and valid JSON', false, 'Run: contextgit init')
     }
 
     // ── 2. DB reachable ───────────────────────────────────────────────────────
-    if (config?.projectId) {
+    if (config?.projectId && configDir) {
       try {
-        const store = new LocalStore(config.projectId as string)
-        await store.getProject(config.projectId as string)
+        const projectId = config.projectId as string
+        const dbPath = resolveDbPath(projectId, configDir)
+        const store = new LocalStore(projectId, dbPath)
+        await store.getProject(projectId)
         check('Local DB reachable', true)
       } catch {
         check('Local DB reachable', false, 'DB file may be corrupted — try: contextgit init')
