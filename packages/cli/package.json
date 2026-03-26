@@ -1,9 +1,10 @@
 {
   "name": "contextgit",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "type": "module",
   "bin": {
-    "contextgit": "./bin/run.js"
+    "contextgit": "./bin/run.js",
+    "contextgit-mcp": "./node_modules/@contextgit/mcp/dist/index.js"
   },
   "oclif": {
     "bin": "contextgit",
@@ -19,9 +20,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.0.13",
-    "@contextgit/store": "0.0.13",
-    "@contextgit/api": "0.0.13",
+    "@contextgit/core": "0.0.14",
+    "@contextgit/store": "0.0.14",
+    "@contextgit/api": "0.0.14",
+    "@contextgit/mcp": "0.0.14",
     "@oclif/core": "^3.27.0",
     "nanoid": "^5.0.0",
     "simple-git": "^3.27.0"

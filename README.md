@@ -26,20 +26,14 @@ npm install -g contextgit
 ## Quick start
 
 ```bash
-# 1. Initialize in your project
+# In your project:
 cd your-project
 contextgit init
-
-# 2. Add the MCP server to Claude Code
-#    In ~/.claude.json, add to mcpServers:
-#    "contextgit": {
-#      "command": "node",
-#      "args": ["<path-to>/contextgit/packages/mcp/dist/index.js"]
-#    }
-
-# 3. Start a Claude Code session — the agent will call project_memory_load
-#    automatically and see your project's full context
 ```
+
+That's it. `init` initializes the project, installs git hooks (optional), updates CLAUDE.md, and registers the MCP server with Claude Code automatically.
+
+Start a Claude Code session — the agent calls `project_memory_load` at session start and sees your project's full context.
 
 ## MCP tools
 

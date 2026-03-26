@@ -9,7 +9,7 @@ import { simpleGit } from 'simple-git'
 import { LocalStore } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
 import { installGitHooks } from '../git-hooks.js'
-import { writeClaude, writeSkills } from '../lib/init-helpers.js'
+import { writeClaude, writeSkills, registerMcp } from '../lib/init-helpers.js'
 
 export default class Init extends Command {
   static description = 'Initialize ContextGit in this project'
@@ -63,6 +63,11 @@ export default class Init extends Command {
         const skillsResult = writeSkills(cwd)
         if (skillsResult.status === 'written') {
           this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
+        }
+
+        const mcpResult = registerMcp()
+        if (mcpResult.status === 'registered') {
+          this.log(`✅ MCP server registered        (~/.claude.json)`)
         }
 
         this.log('ContextGit already initialized. Config found at .contextgit/config.json')
@@ -149,6 +154,17 @@ export default class Init extends Command {
       this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
     } else {
       this.log(`⚠️  Skills not installed        (could not write to .claude/skills/ — create manually)`)
+    }
+
+    // ── Register MCP server in ~/.claude.json ──────────────────────────────────
+    const mcpResult = registerMcp()
+    if (mcpResult.status === 'registered') {
+      this.log(`✅ MCP server registered        (~/.claude.json)`)
+    } else if (mcpResult.status === 'already-present') {
+      this.log(`⏭  MCP server already registered (skipped)`)
+    } else {
+      this.log(`⚠️  MCP server not registered   (${mcpResult.reason})`)
+      this.log(`   Add manually: contextgit-mcp in ~/.claude.json mcpServers`)
     }
 
     this.log(``)

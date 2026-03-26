@@ -2,6 +2,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
+import os from 'os'
 
 // ── CLAUDE.md ─────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,32 @@ When the exploration concludes:
 
 The failure note is as valuable as the success note. The next session needs to know not to try the same dead end.
 `
+
+// ── MCP registration ──────────────────────────────────────────────────────────
+
+/**
+ * Register contextgit-mcp in ~/.claude.json under mcpServers.
+ * Idempotent — skips if the entry already exists.
+ * @returns 'registered' | 'already-present' | 'error'
+ */
+export function registerMcp(): { status: 'registered' | 'already-present' | 'error'; reason?: string } {
+  const claudeJsonPath = join(os.homedir(), '.claude.json')
+  try {
+    let json: Record<string, unknown> = {}
+    if (existsSync(claudeJsonPath)) {
+      json = JSON.parse(readFileSync(claudeJsonPath, 'utf-8')) as Record<string, unknown>
+      const servers = json['mcpServers'] as Record<string, unknown> | undefined
+      if (servers?.['contextgit']) return { status: 'already-present' }
+    }
+    const servers = (json['mcpServers'] as Record<string, unknown> | undefined) ?? {}
+    servers['contextgit'] = { command: 'contextgit-mcp', args: [], type: 'stdio' }
+    json['mcpServers'] = servers
+    writeFileSync(claudeJsonPath, JSON.stringify(json, null, 2) + '\n')
+    return { status: 'registered' }
+  } catch (err) {
+    return { status: 'error', reason: String(err) }
+  }
+}
 
 /**
  * Write the context-commit and context-branch skills into <projectDir>/.claude/skills/.

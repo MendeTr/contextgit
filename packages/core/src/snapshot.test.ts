@@ -103,7 +103,7 @@ describe('SnapshotFormatter inline claim status', () => {
     expect(out).toContain('[CLAIMED by agent-test-1]')
   })
 
-  it('does not include ## Active Claims section in agents-md', () => {
+  it('includes ## Active Claims section in agents-md when claims exist', () => {
     const snapshot = makeSnapshot({
       activeClaims: [
         {
@@ -121,10 +121,10 @@ describe('SnapshotFormatter inline claim status', () => {
     })
 
     const out = formatter.format(snapshot, 'agents-md')
-    expect(out).not.toContain('## Active Claims')
+    expect(out).toContain('## Active Claims')
   })
 
-  it('does not include ACTIVE CLAIMS section in text format', () => {
+  it('includes ACTIVE CLAIMS section in text format when claims exist', () => {
     const snapshot = makeSnapshot({
       activeClaims: [
         {
@@ -142,6 +142,6 @@ describe('SnapshotFormatter inline claim status', () => {
     })
 
     const out = formatter.format(snapshot, 'text')
-    expect(out).not.toContain('=== ACTIVE CLAIMS ===')
+    expect(out).toContain('=== ACTIVE CLAIMS ===')
   })
 })

@@ -88,7 +88,7 @@ export default class DoctorCmd extends Command {
     check(
       'MCP server registered in ~/.claude.json',
       mcpRegistered,
-      'Add contextgit to mcpServers in ~/.claude.json',
+      'Run: contextgit init',
     )
 
     // ── 6. Supabase remote ────────────────────────────────────────────────────
