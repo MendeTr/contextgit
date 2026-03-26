@@ -2,7 +2,7 @@
 
 import { Command, Flags } from '@oclif/core'
 import { simpleGit } from 'simple-git'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import type { SnapshotFormat } from '@contextgit/core'
 import { loadConfig } from '../config.js'
 
@@ -21,7 +21,7 @@ export default class ContextCmd extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(ContextCmd)
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
 
     // Detect current git branch
     let gitBranch = 'main'

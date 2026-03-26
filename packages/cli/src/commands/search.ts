@@ -1,7 +1,7 @@
 // search — full-text search over context commits.
 
 import { Command, Flags } from '@oclif/core'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from '../config.js'
 
 export default class SearchCmd extends Command {
@@ -27,7 +27,7 @@ export default class SearchCmd extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(SearchCmd)
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
 
     const results = await store.fullTextSearch(flags.query, config.projectId)
     const trimmed = results.slice(0, flags.limit)

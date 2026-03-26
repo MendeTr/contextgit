@@ -3,7 +3,7 @@
 // When a task name is provided, finds the matching active claim and releases it.
 
 import { Command, Args } from '@oclif/core'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from '../config.js'
 
 export default class UnclaimCmd extends Command {
@@ -19,7 +19,7 @@ export default class UnclaimCmd extends Command {
   async run(): Promise<void> {
     const { args } = await this.parse(UnclaimCmd)
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
 
     const identifier = args.identifier
 

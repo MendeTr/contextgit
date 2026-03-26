@@ -1,7 +1,7 @@
 // claim — create a task claim to prevent concurrent agent work.
 
 import { Command, Args, Flags } from '@oclif/core'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from '../config.js'
 import { getCliAgentId } from '../agent-id.js'
 
@@ -38,7 +38,7 @@ export default class ClaimCmd extends Command {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ClaimCmd)
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
 
     const branches = await store.listBranches(config.projectId)
     const activeBranch = branches.find((b) => b.status === 'active') ?? branches[0]

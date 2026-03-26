@@ -7,7 +7,7 @@
 //   3. For each branch: collect local commits not present on remote, POST them
 
 import { Command, Flags } from '@oclif/core'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import type { ContextStore } from '@contextgit/store'
 import type { Pagination } from '@contextgit/core'
 import { loadConfig } from '../config.js'
@@ -51,7 +51,7 @@ export default class PushCmd extends Command {
     const { flags } = await this.parse(PushCmd)
     const config = loadConfig()
 
-    const local = new LocalStore(config.projectId)
+    const local = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
     const remote = resolveRemoteStore(config, flags.remote)
     const dryRun = flags['dry-run']
 

@@ -2,7 +2,7 @@
 
 import { Command, Args, Flags } from '@oclif/core'
 import { simpleGit } from 'simple-git'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from '../config.js'
 
 async function currentGitBranch(cwd: string): Promise<string> {
@@ -37,7 +37,7 @@ export default class BranchCmd extends Command {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(BranchCmd)
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
     const cwd = process.cwd()
 
     const gitBranch = flags.git ?? (await currentGitBranch(cwd))

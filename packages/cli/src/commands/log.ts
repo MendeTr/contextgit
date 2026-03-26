@@ -2,7 +2,7 @@
 
 import { Command, Flags } from '@oclif/core'
 import { simpleGit } from 'simple-git'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from '../config.js'
 
 export default class LogCmd extends Command {
@@ -33,7 +33,7 @@ export default class LogCmd extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(LogCmd)
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
     const cwd = process.cwd()
 
     let gitBranch = 'main'

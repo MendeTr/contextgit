@@ -1,7 +1,7 @@
 // remote-show — display remote config and connectivity status.
 
 import { Command } from '@oclif/core'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from '../config.js'
 
 type FetchResult =
@@ -31,7 +31,7 @@ export default class RemoteShowCmd extends Command {
 
   async run(): Promise<void> {
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
 
     this.log(`Project:  ${config.project}  (${config.projectId})`)
 

@@ -2,7 +2,7 @@
 
 import { Command } from '@oclif/core'
 import { simpleGit } from 'simple-git'
-import { LocalStore } from '@contextgit/store'
+import { LocalStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from '../config.js'
 
 export default class StatusCmd extends Command {
@@ -10,7 +10,7 @@ export default class StatusCmd extends Command {
 
   async run(): Promise<void> {
     const config = loadConfig()
-    const store = new LocalStore(config.projectId)
+    const store = new LocalStore(config.projectId, resolveDbPath(config.projectId, config.configDir))
     const cwd = process.cwd()
 
     // Detect current git branch
