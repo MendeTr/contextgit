@@ -219,3 +219,30 @@ export function writeSkills(
     return { status: 'error', reason: String(err) }
   }
 }
+
+// ── .gitignore ────────────────────────────────────────────────────────────────
+
+/**
+ * Ensure .contextgit/context.db is not ignored by git.
+ * Appends a negation rule after any *.db pattern so the in-repo context DB
+ * is committed. git processes .gitignore top-to-bottom, so the exception
+ * must come after the *.db rule — appending to end of file is correct.
+ */
+export function patchGitignore(cwd: string): { status: 'patched' | 'already-present' | 'created' } {
+  const gitignorePath = join(cwd, '.gitignore')
+  const exception = '!.contextgit/context.db'
+  const block = `\n# ContextGit — allow in-repo context DB\n${exception}\n`
+
+  if (!existsSync(gitignorePath)) {
+    writeFileSync(gitignorePath, `# ContextGit — allow in-repo context DB\n${exception}\n`)
+    return { status: 'created' }
+  }
+
+  const contents = readFileSync(gitignorePath, 'utf-8')
+  if (contents.includes(exception)) {
+    return { status: 'already-present' }
+  }
+
+  writeFileSync(gitignorePath, contents + block)
+  return { status: 'patched' }
+}

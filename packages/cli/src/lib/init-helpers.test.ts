@@ -5,6 +5,7 @@ import { join } from 'path'
 import {
   writeClaude,
   writeSkills,
+  patchGitignore,
   CLAUDE_MD_SENTINEL_START,
   CLAUDE_MD_SENTINEL_END,
 } from './init-helpers.js'
@@ -91,5 +92,44 @@ describe('writeSkills', () => {
     writeSkills(tmpDir) // first call
     const result = writeSkills(tmpDir) // second call
     expect(result.status).toBe('written')
+  })
+})
+
+// ── patchGitignore ────────────────────────────────────────────────────────────
+
+describe('patchGitignore', () => {
+  it('creates .gitignore when none exists', () => {
+    const result = patchGitignore(tmpDir)
+    expect(result.status).toBe('created')
+    const contents = readFileSync(join(tmpDir, '.gitignore'), 'utf-8')
+    expect(contents).toContain('!.contextgit/context.db')
+  })
+
+  it('appends exception when .gitignore exists without it', () => {
+    writeFileSync(join(tmpDir, '.gitignore'), 'node_modules/\n*.db\n')
+    const result = patchGitignore(tmpDir)
+    expect(result.status).toBe('patched')
+    const contents = readFileSync(join(tmpDir, '.gitignore'), 'utf-8')
+    expect(contents).toContain('*.db')
+    expect(contents).toContain('!.contextgit/context.db')
+    // Exception must come after the *.db rule
+    expect(contents.indexOf('*.db')).toBeLessThan(contents.indexOf('!.contextgit/context.db'))
+  })
+
+  it('returns already-present when exception already exists', () => {
+    writeFileSync(join(tmpDir, '.gitignore'), '*.db\n!.contextgit/context.db\n')
+    const result = patchGitignore(tmpDir)
+    expect(result.status).toBe('already-present')
+    // File unchanged
+    const contents = readFileSync(join(tmpDir, '.gitignore'), 'utf-8')
+    expect(contents).toBe('*.db\n!.contextgit/context.db\n')
+  })
+
+  it('works when .gitignore has no *.db rule', () => {
+    writeFileSync(join(tmpDir, '.gitignore'), 'node_modules/\ndist/\n')
+    const result = patchGitignore(tmpDir)
+    expect(result.status).toBe('patched')
+    const contents = readFileSync(join(tmpDir, '.gitignore'), 'utf-8')
+    expect(contents).toContain('!.contextgit/context.db')
   })
 })
