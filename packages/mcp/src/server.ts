@@ -23,7 +23,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
 import { ContextEngine, EmbeddingService, SnapshotFormatter } from '@contextgit/core'
-import { LocalStore, RemoteStore, SupabaseStore } from '@contextgit/store'
+import { LocalStore, RemoteStore, SupabaseStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from './config.js'
 import { captureGitMetadata } from './git-sync.js'
 import { AutoSnapshotManager } from './auto-snapshot.js'
@@ -76,12 +76,12 @@ interface ServerContext {
 
 async function bootstrap(): Promise<ServerContext> {
   const config = loadConfig()
-  const { projectId } = config
+  const { projectId, configDir } = config
 
   const store: ContextStore =
     config.store && config.store !== 'local'
       ? new RemoteStore(config.store)
-      : new LocalStore(projectId)
+      : new LocalStore(projectId, resolveDbPath(projectId, configDir))
 
   // Ensure the project row exists before creating branches (FK constraint)
   const existing = await store.getProject(projectId)
