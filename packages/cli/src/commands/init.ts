@@ -107,7 +107,9 @@ export default class Init extends Command {
     const projectId = nanoid()
 
     mkdirSync(configDir, { recursive: true })
-    const store = new LocalStore(projectId, resolveDbPath(projectId, configDir))
+    // Use the local path directly — resolveDbPath falls back to legacy when context.db
+    // doesn't exist yet, but init is the command that creates it.
+    const store = new LocalStore(projectId, join(configDir, 'context.db'))
     await store.createProject({ id: projectId, name: projectName })
 
     const gitBranch = await detectGitBranch(cwd)
