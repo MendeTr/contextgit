@@ -1,41 +1,54 @@
 # ContextGit
 
-Persistent memory for AI coding agents. Like git, but for context.
+Every time you start a new session with an AI coding agent, it starts from zero. It doesn't know what was built yesterday, what decisions were made, or what's left to do. You spend the first 10 minutes of every session re-explaining your project. ContextGit fixes this — it gives your agents a persistent memory layer that survives across sessions, branches, and machines.
 
-## The problem
+## Install
 
-Every time you start a new session with an AI coding agent, it starts from zero. It doesn't know what was built yesterday, what decisions were made, what approaches failed, or what's left to do. You spend the first 10 minutes of every session re-explaining your project.
+```bash
+npm install -g contextgit
+cd your-project
+contextgit init
+```
 
-ContextGit gives your agents a persistent memory layer that survives across sessions. When a new session starts, the agent loads the project snapshot and picks up exactly where the last session left off.
+> **Restart Claude Code** (or any MCP client) after running `init` for the MCP server to take effect.
+
+That's it. `init` registers the MCP server, updates CLAUDE.md with session instructions, and installs Claude Code hooks. Start a new session — the agent calls `project_memory_load` automatically and picks up exactly where the last session left off.
 
 ## How it works
 
-ContextGit stores structured context commits alongside your git history. Each commit captures what was done, what was decided, and what questions remain open. The MCP server exposes this to Claude Code (or any MCP-compatible client) as tools the agent calls automatically.
+ContextGit stores structured context commits alongside your git history. Each commit captures what was done, what was decided, and what questions remain open.
 
 ```
 Session 1: Agent builds auth module → saves context commit
 Session 2: Agent loads snapshot → knows auth is done → starts on the next task
 ```
 
-## Install
+## What the agent sees
 
-```bash
-npm install -g contextgit
+When an agent calls `project_memory_load`, it gets a snapshot like this:
+
+```
+## Project State
+Auth module complete. API routes tested. Database schema finalized.
+
+## Current Branch: Context: main
+Implementing payment integration. Stripe SDK configured.
+
+## Recent Activity
+- [2026-03-20T08:33:44Z] "Payment webhook handler done" by solo via claude-code
+- [2026-03-20T07:15:22Z] "Stripe SDK integration" by solo via claude-code
+- [2026-03-19T16:42:11Z] "Auth module complete" by solo via claude-code
+
+## Open Threads
+- [FREE] Need to add rate limiting to payment endpoints
+- [CLAIMED by studio-mcp-agent] Build invoice PDF generation
+- [FREE] Decide on webhook retry strategy
+
+## Active Claims
+- "Build invoice PDF generation" claimed by studio-mcp-agent (2h TTL)
 ```
 
-## Quick start
-
-```bash
-# In your project:
-cd your-project
-contextgit init
-```
-
-That's it. `init` initializes the project, installs git hooks (optional), updates CLAUDE.md, and registers the MCP server with Claude Code automatically.
-
-> **Restart Claude Code** (or any MCP client) after running `init` for the MCP server to take effect.
-
-Start a Claude Code session — the agent calls `project_memory_load` at session start and sees your project's full context.
+The agent reads this and knows exactly where the project stands without you saying a word.
 
 ## MCP tools
 
@@ -65,33 +78,6 @@ contextgit branch <name>     # Create a context branch
 contextgit merge <id>        # Merge a context branch
 contextgit serve             # Start the REST API server
 ```
-
-## What the agent sees
-
-When an agent calls `project_memory_load`, it gets a snapshot like this:
-
-```
-## Project State
-Auth module complete. API routes tested. Database schema finalized.
-
-## Current Branch: Context: main
-Implementing payment integration. Stripe SDK configured.
-
-## Recent Activity
-- [2026-03-20T08:33:44Z] "Payment webhook handler done" by solo via claude-code
-- [2026-03-20T07:15:22Z] "Stripe SDK integration" by solo via claude-code
-- [2026-03-19T16:42:11Z] "Auth module complete" by solo via claude-code
-
-## Open Threads
-- [FREE] Need to add rate limiting to payment endpoints
-- [CLAIMED by studio-mcp-agent] Build invoice PDF generation
-- [FREE] Decide on webhook retry strategy
-
-## Active Claims
-- "Build invoice PDF generation" claimed by studio-mcp-agent (2h TTL)
-```
-
-The agent reads this and knows exactly where the project stands without you saying a word.
 
 ## Architecture
 
