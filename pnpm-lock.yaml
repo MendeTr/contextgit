@@ -21,10 +21,10 @@ importers:
   packages/api:
     dependencies:
       '@contextgit/core':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../core
       '@contextgit/store':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../store
       express:
         specifier: ^4.19.0
@@ -46,16 +46,16 @@ importers:
   packages/cli:
     dependencies:
       '@contextgit/api':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../api
       '@contextgit/core':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../core
       '@contextgit/mcp':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../mcp
       '@contextgit/store':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../store
       '@oclif/core':
         specifier: ^3.27.0
@@ -99,10 +99,10 @@ importers:
   packages/mcp:
     dependencies:
       '@contextgit/core':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../core
       '@contextgit/store':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../store
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
@@ -124,7 +124,7 @@ importers:
   packages/store:
     dependencies:
       '@contextgit/core':
-        specifier: 0.0.14
+        specifier: 0.1.3
         version: link:../core
       '@supabase/supabase-js':
         specifier: ^2.99.2
