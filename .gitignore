@@ -20,8 +20,8 @@ dist/
 .env
 .env.local
 
-# ContextGit local config (may contain credentials)
-.contextgit/config.json
+# ContextGit local config — credentials go in env vars, not here
+# .contextgit/config.json is committed (no secrets)
 
 # OS
 .DS_Store
