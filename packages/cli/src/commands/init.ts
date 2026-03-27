@@ -54,32 +54,7 @@ export default class Init extends Command {
           installGitHooks(cwd)
           this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
         }
-
-        // Write CLAUDE.md + skills even on re-init (idempotent)
-        const claudeResult = writeClaude(cwd)
-        if (claudeResult.status === 'written') {
-          this.log(`✅ CLAUDE.md updated            (contextgit memory section appended)`)
-        }
-        const skillsResult = writeSkills(cwd)
-        if (skillsResult.status === 'written') {
-          this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
-        }
-
-        const mcpResult = registerMcp()
-        if (mcpResult.status === 'registered') {
-          this.log(`✅ MCP server registered        (~/.claude.json)`)
-        }
-
-        const gitignoreResult = patchGitignore(cwd)
-        if (gitignoreResult.status === 'patched' || gitignoreResult.status === 'created') {
-          this.log(`✅ .gitignore updated           (context DB committed to git)`)
-        }
-
-        const hooksResult = patchClaudeSettings(cwd)
-        if (hooksResult.status === 'patched') {
-          this.log(`✅ Claude hooks installed       (.claude/settings.json)`)
-        }
-
+        runSetupHelpers(cwd, this.log.bind(this))
         this.log('ContextGit already initialized. Config found at .contextgit/config.json')
         return
       }
@@ -100,26 +75,7 @@ export default class Init extends Command {
         installGitHooks(cwd)
         this.log('Git hooks installed (.git/hooks/post-commit, post-checkout, post-merge)')
       }
-      const gitignoreResultRecreate = patchGitignore(cwd)
-      if (gitignoreResultRecreate.status === 'patched' || gitignoreResultRecreate.status === 'created') {
-        this.log(`✅ .gitignore updated           (context DB committed to git)`)
-      }
-      const claudeResultRecreate = writeClaude(cwd)
-      if (claudeResultRecreate.status === 'written') {
-        this.log(`✅ CLAUDE.md updated            (contextgit memory section appended)`)
-      }
-      const skillsResultRecreate = writeSkills(cwd)
-      if (skillsResultRecreate.status === 'written') {
-        this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
-      }
-      const mcpResultRecreate = registerMcp()
-      if (mcpResultRecreate.status === 'registered') {
-        this.log(`✅ MCP server registered        (~/.claude.json)`)
-      }
-      const hooksResultRecreate = patchClaudeSettings(cwd)
-      if (hooksResultRecreate.status === 'patched') {
-        this.log(`✅ Claude hooks installed       (.claude/settings.json)`)
-      }
+      runSetupHelpers(cwd, this.log.bind(this))
       return
     }
 
@@ -152,7 +108,7 @@ export default class Init extends Command {
     }
     writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
 
-    this.log(`✅ Project initialized          (.contextgit.json)`)
+    this.log(`✅ Project initialized          (.contextgit/config.json)`)
     this.log(`   Project:  ${projectName}`)
     this.log(`   ID:       ${projectId}`)
     this.log(`   Branch:   ${gitBranch}`)
@@ -181,44 +137,7 @@ export default class Init extends Command {
       this.log(`⏭  Git hooks skipped           (run "contextgit init --hooks" anytime to install)`)
     }
 
-    // ── Write CLAUDE.md fragment ───────────────────────────────────────────────
-    const claudeResult = writeClaude(cwd)
-    if (claudeResult.status === 'written') {
-      this.log(`✅ CLAUDE.md updated            (contextgit memory section appended)`)
-    } else if (claudeResult.status === 'already-present') {
-      this.log(`⏭  CLAUDE.md already configured (skipped)`)
-    } else {
-      this.log(`⚠️  CLAUDE.md not updated        (${claudeResult.reason})`)
-    }
-
-    // ── Write project-level skills ─────────────────────────────────────────────
-    const skillsResult = writeSkills(cwd)
-    if (skillsResult.status === 'written') {
-      this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
-    } else {
-      this.log(`⚠️  Skills not installed        (could not write to .claude/skills/ — create manually)`)
-    }
-
-    // ── Register MCP server in ~/.claude.json ──────────────────────────────────
-    const mcpResult = registerMcp()
-    if (mcpResult.status === 'registered') {
-      this.log(`✅ MCP server registered        (~/.claude.json)`)
-    } else if (mcpResult.status === 'already-present') {
-      this.log(`⏭  MCP server already registered (skipped)`)
-    } else {
-      this.log(`⚠️  MCP server not registered   (${mcpResult.reason})`)
-      this.log(`   Add manually: contextgit-mcp in ~/.claude.json mcpServers`)
-    }
-
-    // ── Install Claude Code hooks ──────────────────────────────────────────────
-    const hooksResult = patchClaudeSettings(cwd)
-    if (hooksResult.status === 'patched') {
-      this.log(`✅ Claude hooks installed       (.claude/settings.json)`)
-    } else if (hooksResult.status === 'already-present') {
-      this.log(`⏭  Claude hooks already configured (skipped)`)
-    } else {
-      this.log(`⚠️  Claude hooks not installed  (${hooksResult.reason})`)
-    }
+    runSetupHelpers(cwd, this.log.bind(this), { verbose: true })
 
     this.log(``)
     this.log(`ContextGit is ready.`)
@@ -228,6 +147,54 @@ export default class Init extends Command {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Run all idempotent setup helpers (CLAUDE.md, skills, MCP, Claude hooks).
+ * Called from all three init paths (fresh, already-initialized, self-heal).
+ * In verbose mode, logs skipped/error states in addition to success states.
+ */
+function runSetupHelpers(
+  cwd: string,
+  log: (msg: string) => void,
+  opts: { verbose?: boolean } = {},
+): void {
+  const { verbose = false } = opts
+
+  const claudeResult = writeClaude(cwd)
+  if (claudeResult.status === 'written') {
+    log(`✅ CLAUDE.md updated            (contextgit memory section appended)`)
+  } else if (verbose && claudeResult.status === 'already-present') {
+    log(`⏭  CLAUDE.md already configured (skipped)`)
+  } else if (verbose) {
+    log(`⚠️  CLAUDE.md not updated        (${claudeResult.reason})`)
+  }
+
+  const skillsResult = writeSkills(cwd)
+  if (skillsResult.status === 'written') {
+    log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
+  } else if (verbose) {
+    log(`⚠️  Skills not installed        (could not write to .claude/skills/ — create manually)`)
+  }
+
+  const mcpResult = registerMcp()
+  if (mcpResult.status === 'registered') {
+    log(`✅ MCP server registered        (~/.claude.json)`)
+  } else if (verbose && mcpResult.status === 'already-present') {
+    log(`⏭  MCP server already registered (skipped)`)
+  } else if (verbose) {
+    log(`⚠️  MCP server not registered   (${mcpResult.reason})`)
+    log(`   Add manually: contextgit-mcp in ~/.claude.json mcpServers`)
+  }
+
+  const hooksResult = patchClaudeSettings(cwd)
+  if (hooksResult.status === 'patched') {
+    log(`✅ Claude hooks installed       (.claude/settings.json)`)
+  } else if (verbose && hooksResult.status === 'already-present') {
+    log(`⏭  Claude hooks already configured (skipped)`)
+  } else if (verbose) {
+    log(`⚠️  Claude hooks not installed  (${hooksResult.reason})`)
+  }
+}
 
 async function detectGitBranch(cwd: string): Promise<string> {
   try {
