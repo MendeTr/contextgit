@@ -1,6 +1,6 @@
 {
   "name": "contextgit",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "bin": {
     "contextgit": "./bin/run.js",
@@ -20,10 +20,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.1.3",
-    "@contextgit/store": "0.1.3",
-    "@contextgit/api": "0.1.3",
-    "@contextgit/mcp": "0.1.3",
+    "@contextgit/core": "0.1.4",
+    "@contextgit/store": "0.1.4",
+    "@contextgit/api": "0.1.4",
+    "@contextgit/mcp": "0.1.4",
     "@oclif/core": "^3.27.0",
     "nanoid": "^5.0.0",
     "simple-git": "^3.27.0"
