@@ -33,6 +33,8 @@ contextgit init
 
 That's it. `init` initializes the project, installs git hooks (optional), updates CLAUDE.md, and registers the MCP server with Claude Code automatically.
 
+> **Restart Claude Code** (or any MCP client) after running `init` for the MCP server to take effect.
+
 Start a Claude Code session — the agent calls `project_memory_load` at session start and sees your project's full context.
 
 ## MCP tools

@@ -221,8 +221,9 @@ export default class Init extends Command {
     }
 
     this.log(``)
-    this.log(`ContextGit is ready. Start a Claude Code session in this project.`)
-    this.log(`The agent will load project memory automatically via MCP tool discovery.`)
+    this.log(`ContextGit is ready.`)
+    this.log(`⚠️  Restart Claude Code (or any MCP client) for the MCP server to take effect.`)
+    this.log(`The agent will call project_memory_load automatically at session start.`)
   }
 }
 
