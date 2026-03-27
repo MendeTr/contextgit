@@ -5,6 +5,7 @@ import { join } from 'path'
 import {
   writeClaude,
   writeSkills,
+  registerMcp,
   patchGitignore,
   patchClaudeSettings,
   CLAUDE_MD_SENTINEL_START,
@@ -93,6 +94,44 @@ describe('writeSkills', () => {
     writeSkills(tmpDir) // first call
     const result = writeSkills(tmpDir) // second call
     expect(result.status).toBe('written')
+  })
+})
+
+// ── registerMcp ───────────────────────────────────────────────────────────────
+
+describe('registerMcp', () => {
+  it('creates ~/.claude.json with contextgit entry when file does not exist', () => {
+    const claudeJsonPath = join(tmpDir, '.claude.json')
+    const result = registerMcp(claudeJsonPath)
+    expect(result.status).toBe('registered')
+    const json = JSON.parse(readFileSync(claudeJsonPath, 'utf-8'))
+    expect(json.mcpServers.contextgit).toEqual({ command: 'contextgit-mcp', args: [], type: 'stdio' })
+  })
+
+  it('adds contextgit entry to existing file without overwriting other keys', () => {
+    const claudeJsonPath = join(tmpDir, '.claude.json')
+    writeFileSync(claudeJsonPath, JSON.stringify({ theme: 'dark', mcpServers: { other: { command: 'other-mcp' } } }, null, 2))
+    const result = registerMcp(claudeJsonPath)
+    expect(result.status).toBe('registered')
+    const json = JSON.parse(readFileSync(claudeJsonPath, 'utf-8'))
+    expect(json.theme).toBe('dark')
+    expect(json.mcpServers.other).toBeDefined()
+    expect(json.mcpServers.contextgit).toEqual({ command: 'contextgit-mcp', args: [], type: 'stdio' })
+  })
+
+  it('returns already-present and does not mutate file when contextgit entry exists', () => {
+    const claudeJsonPath = join(tmpDir, '.claude.json')
+    const initial = { mcpServers: { contextgit: { command: 'contextgit-mcp', args: [], type: 'stdio' } } }
+    writeFileSync(claudeJsonPath, JSON.stringify(initial, null, 2))
+    const result = registerMcp(claudeJsonPath)
+    expect(result.status).toBe('already-present')
+    expect(JSON.parse(readFileSync(claudeJsonPath, 'utf-8'))).toEqual(initial)
+  })
+
+  it('returns error when file path is not writable', () => {
+    const result = registerMcp('/nonexistent-dir/that/cannot/exist/.claude.json')
+    expect(result.status).toBe('error')
+    expect(result.reason).toBeDefined()
   })
 })
 

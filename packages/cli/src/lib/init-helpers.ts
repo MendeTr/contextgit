@@ -178,20 +178,26 @@ The failure note is as valuable as the success note. The next session needs to k
 /**
  * Register contextgit-mcp in ~/.claude.json under mcpServers.
  * Idempotent — skips if the entry already exists.
+ * @param claudeJsonPath Override path for testing (defaults to ~/.claude.json)
  * @returns 'registered' | 'already-present' | 'error'
  */
-export function registerMcp(): { status: 'registered' | 'already-present' | 'error'; reason?: string } {
-  const claudeJsonPath = join(os.homedir(), '.claude.json')
+export function registerMcp(
+  claudeJsonPath = join(os.homedir(), '.claude.json'),
+): { status: 'registered' | 'already-present' | 'error'; reason?: string } {
   try {
     let json: Record<string, unknown> = {}
     if (existsSync(claudeJsonPath)) {
       json = JSON.parse(readFileSync(claudeJsonPath, 'utf-8')) as Record<string, unknown>
-      const servers = json['mcpServers'] as Record<string, unknown> | undefined
-      if (servers?.['contextgit']) return { status: 'already-present' }
+      const servers = json['mcpServers']
+      if (typeof servers === 'object' && servers !== null && 'contextgit' in servers) {
+        return { status: 'already-present' }
+      }
     }
-    const servers = (json['mcpServers'] as Record<string, unknown> | undefined) ?? {}
-    servers['contextgit'] = { command: 'contextgit-mcp', args: [], type: 'stdio' }
-    json['mcpServers'] = servers
+    const existing = typeof json['mcpServers'] === 'object' && json['mcpServers'] !== null
+      ? (json['mcpServers'] as Record<string, unknown>)
+      : {}
+    existing['contextgit'] = { command: 'contextgit-mcp', args: [], type: 'stdio' }
+    json['mcpServers'] = existing
     writeFileSync(claudeJsonPath, JSON.stringify(json, null, 2) + '\n')
     return { status: 'registered' }
   } catch (err) {
