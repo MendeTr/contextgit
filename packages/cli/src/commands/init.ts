@@ -104,6 +104,18 @@ export default class Init extends Command {
       if (gitignoreResultRecreate.status === 'patched' || gitignoreResultRecreate.status === 'created') {
         this.log(`✅ .gitignore updated           (context DB committed to git)`)
       }
+      const claudeResultRecreate = writeClaude(cwd)
+      if (claudeResultRecreate.status === 'written') {
+        this.log(`✅ CLAUDE.md updated            (contextgit memory section appended)`)
+      }
+      const skillsResultRecreate = writeSkills(cwd)
+      if (skillsResultRecreate.status === 'written') {
+        this.log(`✅ Skills installed             (.claude/skills/context-commit, .claude/skills/context-branch)`)
+      }
+      const mcpResultRecreate = registerMcp()
+      if (mcpResultRecreate.status === 'registered') {
+        this.log(`✅ MCP server registered        (~/.claude.json)`)
+      }
       const hooksResultRecreate = patchClaudeSettings(cwd)
       if (hooksResultRecreate.status === 'patched') {
         this.log(`✅ Claude hooks installed       (.claude/settings.json)`)
