@@ -1,6 +1,6 @@
 {
   "name": "contextgit",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "bin": {
     "contextgit": "./bin/run.js",
@@ -15,15 +15,28 @@
     "dist",
     "bin"
   ],
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "memory",
+    "context",
+    "git",
+    "mcp",
+    "claude-code",
+    "llm",
+    "persistent-memory"
+  ],
+  "description": "Persistent memory layer for AI agent workflows",
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.1.5",
-    "@contextgit/store": "0.1.5",
-    "@contextgit/api": "0.1.5",
-    "@contextgit/mcp": "0.1.5",
+    "@contextgit/core": "0.1.6",
+    "@contextgit/store": "0.1.6",
+    "@contextgit/api": "0.1.6",
+    "@contextgit/mcp": "0.1.6",
     "@oclif/core": "^3.27.0",
     "nanoid": "^5.0.0",
     "simple-git": "^3.27.0"
