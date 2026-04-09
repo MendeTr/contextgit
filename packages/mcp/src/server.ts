@@ -22,7 +22,7 @@ import os from 'os'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
-import { ContextEngine, EmbeddingService, SnapshotFormatter } from '@contextgit/core'
+import { ContextEngine, EmbeddingService, SnapshotFormatter, ClaudeMdGenerator } from '@contextgit/core'
 import { LocalStore, RemoteStore, SupabaseStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from './config.js'
 import { captureGitMetadata } from './git-sync.js'
@@ -126,6 +126,7 @@ export async function createServer(): Promise<McpServer> {
   const autoSnapshot = new AutoSnapshotManager(ctx.engine, {
     interval: ctx.config.snapshotInterval ?? 10,
   })
+  const claudeMdGen = new ClaudeMdGenerator()
 
   const INITIATION_RITUAL = `
 ---
@@ -287,11 +288,26 @@ If you are a subagent working on a specific task, call this tool first to unders
         ...(Object.keys(threads).length > 0 ? { threads } : {}),
       })
 
+      // Generate/update CLAUDE.md in the project root
+      let claudeMdNote = ''
+      try {
+        const result = await claudeMdGen.write(process.cwd(), {
+          projectName: ctx.config.project,
+          content: commit.content,
+          timestamp: commit.createdAt,
+        })
+        claudeMdNote = result.warning
+          ? `\n\nWarning: ${result.warning}`
+          : `\nCLAUDE.md updated (${result.file}).`
+      } catch {
+        // Non-fatal — CLAUDE.md generation failure does not fail the commit
+      }
+
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Commit recorded.\nID: ${commit.id}\nMessage: ${commit.message}`,
+            text: `Commit recorded.\nID: ${commit.id}\nMessage: ${commit.message}${claudeMdNote}`,
           },
         ],
       }
