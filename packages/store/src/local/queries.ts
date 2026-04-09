@@ -702,9 +702,10 @@ export class Queries {
 
     const activeClaims = this.listActiveClaims(projectId)
 
-    // Check if the branch has been initiated (any commit exists, regardless of role filter)
+    // Check if the project has been initiated: true if main/master branch has a head commit
+    // OR if the current branch has any commits (covers projects without a named main branch)
     const allCommits = this.listCommits(branchId, { limit: 1, offset: 0 })
-    const isInitiated = allCommits.length > 0
+    const isInitiated = mainBranch?.headCommitId != null || allCommits.length > 0
 
     return {
       projectSummary,

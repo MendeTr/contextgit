@@ -164,6 +164,45 @@ describe('LocalStore (in-memory)', () => {
     expect(snapshot.isInitiated).toBe(true)
   })
 
+  it('getSessionSnapshot sets isInitiated=true on feature branch when main has commits', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const mainBranch = await store.createBranch({
+      projectId: project.id,
+      name: 'main',
+      gitBranch: 'main',
+    })
+    await store.upsertAgent({
+      id: 'agent-main',
+      projectId: project.id,
+      role: 'solo',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+    })
+    // Commit on main to initiate the project
+    await store.createCommit({
+      branchId: mainBranch.id,
+      agentId: 'agent-main',
+      agentRole: 'solo',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+      message: 'context initiation: Project',
+      content: 'Initial context.',
+      summary: 'Initial context.',
+      commitType: 'manual',
+    })
+
+    // Create a fresh feature branch with no commits
+    const featureBranch = await store.createBranch({
+      projectId: project.id,
+      name: 'feature',
+      gitBranch: 'feat/my-feature',
+    })
+
+    // Feature branch has no commits — but the project is initiated
+    const snapshot = await store.getSessionSnapshot(project.id, featureBranch.id)
+    expect(snapshot.isInitiated).toBe(true)
+  })
+
   it('getFormattedSnapshot returns text format', async () => {
     const project = await store.createProject({ name: 'fmt-test' })
     const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
