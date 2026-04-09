@@ -10,6 +10,7 @@ function makeSnapshot(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot
     recentCommits: [],
     openThreads: [],
     activeClaims: [],
+    isInitiated: true,
     ...overrides,
   }
 }

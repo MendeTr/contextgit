@@ -204,6 +204,7 @@ export interface SessionSnapshot {
   recentCommits: Commit[]      // last 3
   openThreads: Thread[]
   activeClaims: Claim[]        // non-released, non-TTL-expired claims
+  isInitiated: boolean         // true when the project has at least one commit
 }
 
 export interface ContextDelta {
