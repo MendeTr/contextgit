@@ -702,6 +702,10 @@ export class Queries {
 
     const activeClaims = this.listActiveClaims(projectId)
 
+    // Check if the branch has been initiated (any commit exists, regardless of role filter)
+    const allCommits = this.listCommits(branchId, { limit: 1, offset: 0 })
+    const isInitiated = allCommits.length > 0
+
     return {
       projectSummary,
       branchName: branch?.name ?? '',
@@ -709,6 +713,7 @@ export class Queries {
       recentCommits,
       openThreads,
       activeClaims,
+      isInitiated,
     }
   }
 
