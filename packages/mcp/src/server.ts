@@ -323,7 +323,17 @@ IMPORTANT: Call this tool BEFORE ending your session or moving to the next task.
 
 If you skip this call, the next session starts blind. Your work will be invisible to future agents. They will re-do what you already did.
 
-Call after: completing a feature, making an architectural decision, resolving a bug, closing a thread, or finishing any meaningful unit of work. Small decisions compound — save them.`,
+Call after: completing a feature, making an architectural decision, resolving a bug, closing a thread, or finishing any meaningful unit of work. Small decisions compound — save them.
+
+FIRST COMMIT (context initiation): If this is the first context commit for the project, structure the content as a comprehensive project summary with these sections:
+- Project: name, purpose, current status
+- Architecture: tech stack, key patterns, module structure
+- Decisions: major technical decisions and their rationale
+- Conventions: naming, code style, testing approach
+- Current state: what's working, what's in progress, what's planned
+- Open threads: unresolved questions, known issues, pending decisions
+
+A CLAUDE.md file will be auto-generated in the project root from this content.`,
     projectMemorySaveSchema,
     handleProjectMemorySave,
   )
