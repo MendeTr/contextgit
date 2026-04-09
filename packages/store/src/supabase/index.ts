@@ -402,6 +402,10 @@ export class SupabaseStore implements ContextStore {
     if (threadsResult.error) throw new Error(threadsResult.error.message)
     if (claimsResult.error) throw new Error(claimsResult.error.message)
 
+    // Compute isInitiated: true if branch has at least one commit
+    const hasCommits = (commitsResult.data ?? []).length > 0
+    const isInitiated = hasCommits || branch.headCommitId !== null
+
     return {
       projectSummary,
       branchName: branch.name,
@@ -409,6 +413,7 @@ export class SupabaseStore implements ContextStore {
       recentCommits: ((commitsResult.data ?? []) as Row[]).map(parseCommit),
       openThreads: ((threadsResult.data ?? []) as Row[]).map(parseThread),
       activeClaims: ((claimsResult.data ?? []) as Row[]).map(parseClaim),
+      isInitiated,
     }
   }
 

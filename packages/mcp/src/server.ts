@@ -127,6 +127,48 @@ export async function createServer(): Promise<McpServer> {
     interval: ctx.config.snapshotInterval ?? 10,
   })
 
+  const INITIATION_RITUAL = `
+---
+## ContextGit: Fresh Setup Detected
+
+No project context found. This is a fresh ContextGit setup. Run the context initiation ritual before doing any other work:
+
+1. Ask the user for specs, PRDs, architecture docs, or design documents.
+   These are the highest-value context. Check /docs, /documentation, /specs,
+   and root-level markdown files. Ask the user directly — they may have
+   documents outside the repo.
+
+2. Scan the project structure automatically (no user input needed):
+   README, package.json / Cargo.toml / pyproject.toml / go.mod, folder
+   structure (2 levels deep), config files (.env.example, tsconfig.json,
+   docker-compose.yml, CI configs), monorepo workspace config.
+
+3. Analyze codebase patterns: entry points, naming conventions, architecture
+   patterns in practice, test structure, error handling patterns.
+
+4. Read recent git history: last 20-50 commit messages, active branches,
+   most frequently changed files.
+
+5. Synthesize everything into a structured project summary. Present it to
+   the user for review. Ask: "What did I get wrong? What's missing?"
+
+6. After the user validates, write a project_memory_save with the reviewed
+   summary. Structure it as:
+   - Project: name, purpose, current status
+   - Architecture: tech stack, key patterns, module structure
+   - Decisions: major technical decisions and their rationale
+   - Conventions: naming, code style, testing approach
+   - Current state: what's working, what's in progress, what's planned
+   - Open threads: unresolved questions, known issues, pending decisions
+
+   This is the foundation all future context builds on — make it thorough.
+
+7. A CLAUDE.md file will be auto-generated in the project root after you
+   call project_memory_save. It gives context to any tool that reads CLAUDE.md.
+
+Do steps 1-4 before showing the summary. Do not skip the human review in step 5.
+---`
+
   const server = new McpServer({
     name: 'contextgit',
     version: '0.0.1',
@@ -164,8 +206,9 @@ export async function createServer(): Promise<McpServer> {
       }
 
       const text = new SnapshotFormatter().format(snapshot, format ?? 'agents-md')
+      const output = snapshot.isInitiated ? text : text + INITIATION_RITUAL
       return {
-        content: [{ type: 'text' as const, text }],
+        content: [{ type: 'text' as const, text: output }],
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

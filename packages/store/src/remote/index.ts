@@ -200,6 +200,7 @@ export class RemoteStore implements ContextStore {
       recentCommits: Raw[]
       openThreads: Raw[]
       activeClaims?: Raw[]
+      isInitiated?: boolean
     }>('GET', `/projects/${projectId}/session-snapshot?${qs}`)
     return {
       projectSummary: raw.projectSummary,
@@ -208,6 +209,7 @@ export class RemoteStore implements ContextStore {
       recentCommits: raw.recentCommits.map(parseCommit),
       openThreads: raw.openThreads.map(parseThread),
       activeClaims: (raw.activeClaims ?? []).map(parseClaim),
+      isInitiated: raw.isInitiated ?? true,
     }
   }
 
