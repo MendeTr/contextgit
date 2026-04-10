@@ -1,6 +1,6 @@
 {
   "name": "@contextgit/mcp",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,8 +18,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.1.8",
-    "@contextgit/store": "0.1.8",
+    "@contextgit/core": "0.1.9",
+    "@contextgit/store": "0.1.9",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "simple-git": "^3.27.0",
     "zod": "^3.23.0"
