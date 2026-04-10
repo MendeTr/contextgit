@@ -1,6 +1,6 @@
 {
   "name": "@contextgit/store",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.1.7",
+    "@contextgit/core": "0.1.8",
     "@supabase/supabase-js": "^2.99.2",
     "better-sqlite3": "^9.4.0",
     "nanoid": "^5.0.0",
