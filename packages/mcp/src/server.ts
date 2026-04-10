@@ -239,11 +239,11 @@ Do steps 1-4 before showing the summary. Do not skip the human review in step 5.
     'project_memory_load',
     `Load persistent project memory and context.
 
-IMPORTANT: Call this tool at the START of every session — before reading files, before asking questions, before doing any work. This tool returns the project's current state including: what was built, what was decided, active tasks, claimed work, recent decisions, and open questions.
+Call this ONCE at the start of every session — before reading files, before asking questions, before doing any work. This tool returns the project's current state including: what was built, what was decided, active tasks, claimed work, recent decisions, and open questions.
 
-Skipping this call means you will duplicate work that was already done, re-explore approaches that already failed, and contradict decisions that were already made.
+Do not call again unless you need to check for changes made by other agents. After the first load, the context is in your conversation window — reloading wastes tokens and adds latency.
 
-If you are a subagent working on a specific task, call this tool first to understand the full project context before starting your assigned work.`,
+Skipping this call means you will duplicate work that was already done, re-explore approaches that already failed, and contradict decisions that were already made.`,
     projectMemoryLoadSchema,
     handleProjectMemoryLoad,
   )
@@ -291,9 +291,12 @@ If you are a subagent working on a specific task, call this tool first to unders
       // Generate/update CLAUDE.md in the project root
       let claudeMdNote = ''
       try {
+        const snapshot = await ctx.store.getSessionSnapshot(ctx.projectId, ctx.branchId)
+        const formatter = new SnapshotFormatter()
+        const snapshotContent = formatter.format(snapshot, 'agents-md')
         const result = await claudeMdGen.write(process.cwd(), {
           projectName: ctx.config.project,
-          content: commit.content,
+          content: snapshotContent,
           timestamp: commit.createdAt,
         })
         claudeMdNote = result.warning
@@ -333,13 +336,13 @@ If you are a subagent working on a specific task, call this tool first to unders
 
   server.tool(
     'project_memory_save',
-    `Save project memory after completing work.
+    `Save project memory after completing significant work.
 
-IMPORTANT: Call this tool BEFORE ending your session or moving to the next task. This saves what you did, what you decided, and what questions remain — so the next session (or the next agent) can pick up where you left off.
+Call this when you make a git commit or complete significant work (finished a feature, made a key decision, resolved a problem). Pair context saves with git commits. Do not call after every user message or minor interaction.
 
-If you skip this call, the next session starts blind. Your work will be invisible to future agents. They will re-do what you already did.
+The correct rhythm: load once at session start → work → save when you git commit → work → save when you git commit again.
 
-Call after: completing a feature, making an architectural decision, resolving a bug, closing a thread, or finishing any meaningful unit of work. Small decisions compound — save them.
+If you skip this call at session end, the next session starts blind. Your work will be invisible to future agents.
 
 FIRST COMMIT (context initiation): If this is the first context commit for the project, structure the content as a comprehensive project summary with these sections:
 - Project: name, purpose, current status
@@ -349,7 +352,7 @@ FIRST COMMIT (context initiation): If this is the first context commit for the p
 - Current state: what's working, what's in progress, what's planned
 - Open threads: unresolved questions, known issues, pending decisions
 
-A CLAUDE.md file will be auto-generated in the project root from this content.`,
+A CLAUDE.md file will be auto-generated in the project root from the full session snapshot after this call.`,
     projectMemorySaveSchema,
     handleProjectMemorySave,
   )
