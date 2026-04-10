@@ -145,4 +145,44 @@ describe('SnapshotFormatter inline claim status', () => {
     const out = formatter.format(snapshot, 'text')
     expect(out).toContain('=== ACTIVE CLAIMS ===')
   })
+
+  it('agents-md does not contain ## Current Branch section', () => {
+    const snapshot = makeSnapshot({ branchSummary: 'branch summary' })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).not.toContain('## Current Branch')
+  })
+
+  it('agents-md contains ## Project State before ## Open Threads', () => {
+    const snapshot = makeSnapshot({
+      openThreads: [
+        {
+          id: 't1',
+          projectId: 'p',
+          branchId: 'b',
+          description: 'thread one',
+          status: 'open',
+          openedInCommit: 'c1',
+          createdAt: new Date(),
+        },
+      ],
+    })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out.indexOf('## Project State')).toBeLessThan(out.indexOf('## Open Threads'))
+  })
+
+  it('agents-md deduplicates open threads by id', () => {
+    const thread = {
+      id: 'dup-1',
+      projectId: 'p',
+      branchId: 'b',
+      description: 'duplicated thread',
+      status: 'open' as const,
+      openedInCommit: 'c1',
+      createdAt: new Date(),
+    }
+    const snapshot = makeSnapshot({ openThreads: [thread, thread] })
+    const out = formatter.format(snapshot, 'agents-md')
+    const count = (out.match(/duplicated thread/g) ?? []).length
+    expect(count).toBe(1)
+  })
 })

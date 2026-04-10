@@ -21,13 +21,14 @@ export class SnapshotFormatter {
     }
 
     if (fmt === 'agents-md') {
+      const uniqueThreads = [...new Map(openThreads.map((t) => [t.id, t])).values()]
       const commits = recentCommits
         .map(
           (c) =>
             `- [${c.createdAt.toISOString()}] "${c.message}" by ${c.agentRole} via ${c.tool} (${c.workflowType})`,
         )
         .join('\n')
-      const threads = openThreads
+      const threads = uniqueThreads
         .map(
           (t) =>
             `- ${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
@@ -37,14 +38,11 @@ export class SnapshotFormatter {
         `## Project State`,
         projectSummary || '(no summary yet)',
         ``,
-        `## Current Branch: ${branchName}`,
-        branchSummary || '(no branch summary yet)',
+        `## Open Threads`,
+        threads || '(none)',
         ``,
         `## Recent Activity`,
         commits || '(no commits yet)',
-        ``,
-        `## Open Threads`,
-        threads || '(none)',
         ``,
         `## Active Claims`,
         activeClaims.length
