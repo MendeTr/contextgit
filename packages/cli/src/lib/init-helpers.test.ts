@@ -144,11 +144,16 @@ describe('patchClaudeSettings', () => {
     const settingsPath = join(tmpDir, '.claude', 'settings.json')
     expect(existsSync(settingsPath)).toBe(true)
     const json = JSON.parse(readFileSync(settingsPath, 'utf-8'))
-    expect(json.hooks.UserPromptSubmit).toHaveLength(1)
-    expect(json.hooks.UserPromptSubmit[0].hooks[0].command).toContain('project_memory_load')
+    // SessionStart (not UserPromptSubmit)
+    expect(json.hooks.SessionStart).toHaveLength(1)
+    expect(json.hooks.SessionStart[0].hooks[0].command).toContain('project_memory_load')
+    // PostToolUse with native if condition
     expect(json.hooks.PostToolUse).toHaveLength(1)
     expect(json.hooks.PostToolUse[0].matcher).toBe('Bash')
+    expect(json.hooks.PostToolUse[0].if).toBe('Bash(git commit*)')
     expect(json.hooks.PostToolUse[0].hooks[0].command).toContain('project_memory_save')
+    // No UserPromptSubmit
+    expect(json.hooks.UserPromptSubmit).toBeUndefined()
   })
 
   it('merges hooks into existing settings.json without overwriting other keys', () => {
@@ -158,7 +163,7 @@ describe('patchClaudeSettings', () => {
     patchClaudeSettings(tmpDir)
     const json = JSON.parse(readFileSync(settingsPath, 'utf-8'))
     expect(json.permissions.allow).toContain('Bash(git:*)')
-    expect(json.hooks.UserPromptSubmit).toBeDefined()
+    expect(json.hooks.SessionStart).toBeDefined()
     expect(json.hooks.PostToolUse).toBeDefined()
   })
 
@@ -168,7 +173,7 @@ describe('patchClaudeSettings', () => {
     expect(result.status).toBe('already-present')
     const json = JSON.parse(readFileSync(join(tmpDir, '.claude', 'settings.json'), 'utf-8'))
     // hooks not duplicated
-    expect(json.hooks.UserPromptSubmit).toHaveLength(1)
+    expect(json.hooks.SessionStart).toHaveLength(1)
   })
 })
 

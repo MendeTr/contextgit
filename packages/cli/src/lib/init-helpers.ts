@@ -235,13 +235,13 @@ export function writeSkills(
 const CLAUDE_HOOKS_SENTINEL = 'project_memory_load'
 
 const CONTEXTGIT_HOOKS = {
-  UserPromptSubmit: [
+  SessionStart: [
     {
       hooks: [
         {
           type: 'command',
           command:
-            `printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"MANDATORY: Call project_memory_load before doing any work. Do not read files, write code, or answer questions until you have called project_memory_load and read the snapshot."}}'`,
+            `printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"MANDATORY: Call project_memory_load before doing any work. Do not read files, write code, or answer questions until you have called project_memory_load and read the snapshot."}}'`,
         },
       ],
     },
@@ -249,11 +249,12 @@ const CONTEXTGIT_HOOKS = {
   PostToolUse: [
     {
       matcher: 'Bash',
+      if: 'Bash(git commit*)',
       hooks: [
         {
           type: 'command',
           command:
-            `cmd=$(jq -r '.tool_input.command // ""'); if echo "$cmd" | grep -q 'git commit'; then printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"MANDATORY: Call project_memory_save NOW before proceeding to any next task. Every git commit must be paired with project_memory_save immediately after."}}'; fi`,
+            `printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"MANDATORY: Call project_memory_save NOW before proceeding to any next task. Every git commit must be paired with project_memory_save immediately after."}}'`,
         },
       ],
     },
@@ -277,7 +278,7 @@ export function patchClaudeSettings(
     }
 
     const hooks = (json['hooks'] as Record<string, unknown[]> | undefined) ?? {}
-    hooks['UserPromptSubmit'] = [...(hooks['UserPromptSubmit'] ?? []), ...CONTEXTGIT_HOOKS.UserPromptSubmit]
+    hooks['SessionStart'] = [...(hooks['SessionStart'] ?? []), ...CONTEXTGIT_HOOKS.SessionStart]
     hooks['PostToolUse'] = [...(hooks['PostToolUse'] ?? []), ...CONTEXTGIT_HOOKS.PostToolUse]
     json['hooks'] = hooks
 
