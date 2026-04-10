@@ -86,7 +86,7 @@ describe('ClaudeMdGenerator', () => {
       })
       expect(result.file).toBe('CLAUDE.contextgit.md')
       expect(result.warning).toBeDefined()
-      expect(result.warning).toContain('CLAUDE.contextgit.md')
+      expect(result.warning).toContain('@CLAUDE.contextgit.md')
       // Original CLAUDE.md untouched
       expect(readFileSync(join(tmpDir, 'CLAUDE.md'), 'utf-8')).toContain('Do not overwrite.')
       // New file created
