@@ -214,4 +214,31 @@ describe('SnapshotFormatter inline claim status', () => {
     const out = formatter.format(snapshot, 'text')
     expect(out).toContain('+3 stale')
   })
+
+  it('agents-md renders the Git section with live branch/HEAD/commit count when set', () => {
+    const snapshot = makeSnapshot({
+      branchName: 'feature/x',
+      headSha: '1234567890abcdef',
+      commitCount: 42,
+    })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).toContain('## Git')
+    expect(out).toContain('Branch: feature/x')
+    expect(out).toContain('HEAD: 12345678')
+    expect(out).toContain('42 commits')
+  })
+
+  it('omits the Git section when headSha and commitCount are not set', () => {
+    const snapshot = makeSnapshot() // branchName defaults to 'main' but no headSha/commitCount
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).not.toContain('## Git')
+  })
+
+  it('text format also renders the GIT section', () => {
+    const snapshot = makeSnapshot({ headSha: 'abc12345abcdef', commitCount: 7 })
+    const out = formatter.format(snapshot, 'text')
+    expect(out).toContain('=== GIT ===')
+    expect(out).toContain('HEAD: abc12345')
+    expect(out).toContain('7 commits')
+  })
 })

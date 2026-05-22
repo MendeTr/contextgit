@@ -35,6 +35,31 @@ export async function captureGitMetadata(
   }
 }
 
+/**
+ * Capture the volatile git facts the Roadmap exposes (02 DELTA spec line 89-93):
+ * current branch, HEAD sha, and reachable commit count. Read live, never cached.
+ * Returns null on any error — these facts are best-effort enrichment.
+ */
+export async function captureGitFacts(
+  cwd: string,
+): Promise<{ sha: string; branch: string; commitCount: number } | null> {
+  try {
+    const git = simpleGit(cwd)
+    const [sha, branch, count] = await Promise.all([
+      git.revparse(['HEAD']),
+      git.revparse(['--abbrev-ref', 'HEAD']),
+      git.raw(['rev-list', '--count', 'HEAD']),
+    ])
+    return {
+      sha: sha.trim(),
+      branch: branch.trim(),
+      commitCount: Number.parseInt(count.trim(), 10),
+    }
+  } catch {
+    return null
+  }
+}
+
 // ─── installGitHooks ──────────────────────────────────────────────────────────
 
 const HOOK_SCRIPTS: Record<string, string> = {

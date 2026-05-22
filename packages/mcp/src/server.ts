@@ -25,7 +25,7 @@ import { simpleGit } from 'simple-git'
 import { ContextEngine, EmbeddingService, SnapshotFormatter, ClaudeMdGenerator } from '@contextgit/core'
 import { LocalStore, RemoteStore, SupabaseStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from './config.js'
-import { captureGitMetadata } from './git-sync.js'
+import { captureGitFacts, captureGitMetadata } from './git-sync.js'
 import { AutoSnapshotManager } from './auto-snapshot.js'
 import type { ContextStore } from '@contextgit/store'
 import type { ContextGitConfig } from '@contextgit/core'
@@ -181,11 +181,13 @@ Do steps 1-4 before showing the summary. Do not skip the human review in step 5.
     format,
     agent_role,
     since,
+    commit_window,
   }: {
     scope?: 'global' | 'branch'
     format?: 'agents-md' | 'json' | 'text'
     agent_role?: 'orchestrator' | 'dev' | 'test' | 'review' | 'background' | 'ci' | 'solo'
     since?: number
+    commit_window?: number
   }) => {
     await autoSnapshot.onToolCall('context_get')
     try {
@@ -195,15 +197,29 @@ Do steps 1-4 before showing the summary. Do not skip the human review in step 5.
           content: [{ type: 'text' as const, text: JSON.stringify(delta, null, 2) }],
         }
       }
+      const snapshotOptions: { agentRole?: typeof agent_role; commitWindow?: number } = {}
+      if (agent_role) snapshotOptions.agentRole = agent_role
+      if (commit_window != null) snapshotOptions.commitWindow = commit_window
       const snapshot = await ctx.store.getSessionSnapshot(
         ctx.projectId,
         ctx.branchId,
-        agent_role ? { agentRole: agent_role } : undefined,
+        Object.keys(snapshotOptions).length ? snapshotOptions : undefined,
       )
 
       // If claimsStore is different (Supabase configured), replace claims with live data
       if (ctx.claimsStore !== ctx.store) {
         snapshot.activeClaims = await ctx.claimsStore.listActiveClaims(ctx.projectId)
+      }
+
+      // Populate volatile git facts live at load time (02 DELTA spec line 89-93).
+      // A fact git can answer is never cached in ContextGit; caching is how it goes stale.
+      const gitFacts = await captureGitFacts(process.cwd())
+      if (gitFacts) {
+        snapshot.headSha = gitFacts.sha
+        snapshot.commitCount = gitFacts.commitCount
+        // branchName too — but only override if git's value disagrees, since the store may
+        // know a logical "name" distinct from the raw git branch.
+        if (!snapshot.branchName) snapshot.branchName = gitFacts.branch
       }
 
       const text = new SnapshotFormatter().format(snapshot, format ?? 'agents-md')
@@ -232,6 +248,9 @@ Do steps 1-4 before showing the summary. Do not skip the human review in step 5.
     ),
     since: z.number().optional().describe(
       'Unix timestamp ms. When provided, returns only commits and thread changes after this time. Use for orchestrator polling loops.',
+    ),
+    commit_window: z.number().int().positive().optional().describe(
+      'How many recent commits to include in the snapshot. Defaults to 5. Use project_memory_retrieve with tier="commits" to scroll past the window.',
     ),
   }
 

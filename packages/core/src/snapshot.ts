@@ -22,6 +22,20 @@ function decayCountLine(staleCount: number | undefined, expiredCount: number | u
   return `(${parts.join(', ')} — call project_memory_threads to view)`
 }
 
+/**
+ * Live git facts line (02 DELTA gate 1): Branch | HEAD | commit count, read fresh on every load.
+ * Returns null unless at least one of headSha / commitCount is set — branchName alone is already
+ * shown elsewhere in the snapshot and doesn't justify the section.
+ */
+function gitFactsLine(branchName: string, headSha?: string, commitCount?: number): string | null {
+  if (!headSha && commitCount == null) return null
+  const parts: string[] = []
+  if (branchName) parts.push(`Branch: ${branchName}`)
+  if (headSha) parts.push(`HEAD: ${headSha.slice(0, 8)}`)
+  if (commitCount != null) parts.push(`${commitCount} commits`)
+  return parts.join(' | ')
+}
+
 export class SnapshotFormatter {
   format(snapshot: SessionSnapshot, fmt: SnapshotFormat): string {
     const { projectSummary, branchName, branchSummary, recentCommits, openThreads, activeClaims } = snapshot
@@ -31,6 +45,7 @@ export class SnapshotFormatter {
     }
 
     const countLine = decayCountLine(snapshot.staleThreadCount, snapshot.expiredWatchCount)
+    const factsLine = gitFactsLine(branchName, snapshot.headSha, snapshot.commitCount)
 
     if (fmt === 'agents-md') {
       const uniqueThreads = [...new Map(openThreads.map((t) => [t.id, t])).values()]
@@ -47,26 +62,21 @@ export class SnapshotFormatter {
         )
         .join('\n')
       const threadsSection = countLine ? `${threads || '(none)'}\n${countLine}` : (threads || '(none)')
-      return [
-        `## Project State`,
-        projectSummary || '(no summary yet)',
-        ``,
-        `## Open Threads`,
-        threadsSection,
-        ``,
-        `## Recent Activity`,
-        commits || '(no commits yet)',
-        ``,
-        `## Active Claims`,
-        activeClaims.length
-          ? activeClaims
-              .map(
-                (cl) =>
-                  `- [CLAIMED by ${cl.agentId}] ${cl.task} (claimed ${cl.claimedAt.toISOString()})`,
-              )
-              .join('\n')
-          : '(none)',
-      ].join('\n')
+      const claimsSection = activeClaims.length
+        ? activeClaims
+            .map(
+              (cl) =>
+                `- [CLAIMED by ${cl.agentId}] ${cl.task} (claimed ${cl.claimedAt.toISOString()})`,
+            )
+            .join('\n')
+        : '(none)'
+      const sections: string[] = []
+      sections.push(`## Project State`, projectSummary || '(no summary yet)')
+      if (factsLine) sections.push(``, `## Git`, factsLine)
+      sections.push(``, `## Open Threads`, threadsSection)
+      sections.push(``, `## Recent Activity`, commits || '(no commits yet)')
+      sections.push(``, `## Active Claims`, claimsSection)
+      return sections.join('\n')
     }
 
     // text (default)
@@ -83,29 +93,21 @@ export class SnapshotFormatter {
       )
       .join('\n')
     const threadsSectionText = countLine ? `${threads || '(none)'}\n${countLine}` : (threads || '(none)')
-
-    return [
-      `=== PROJECT STATE ===`,
-      projectSummary || '(no summary yet)',
-      ``,
-      `=== CURRENT BRANCH: ${branchName} ===`,
-      branchSummary || '(no branch summary yet)',
-      ``,
-      `=== LAST 3 COMMITS ===`,
-      commits || '(none)',
-      ``,
-      `=== OPEN THREADS ===`,
-      threadsSectionText,
-      ``,
-      `=== ACTIVE CLAIMS ===`,
-      activeClaims.length
-        ? activeClaims
-            .map(
-              (cl) =>
-                `- [CLAIMED by ${cl.agentId}] ${cl.task} (claimed ${cl.claimedAt.toISOString()})`,
-            )
-            .join('\n')
-        : '(none)',
-    ].join('\n')
+    const claimsSectionText = activeClaims.length
+      ? activeClaims
+          .map(
+            (cl) =>
+              `- [CLAIMED by ${cl.agentId}] ${cl.task} (claimed ${cl.claimedAt.toISOString()})`,
+          )
+          .join('\n')
+      : '(none)'
+    const textSections: string[] = []
+    textSections.push(`=== PROJECT STATE ===`, projectSummary || '(no summary yet)')
+    if (factsLine) textSections.push(``, `=== GIT ===`, factsLine)
+    textSections.push(``, `=== CURRENT BRANCH: ${branchName} ===`, branchSummary || '(no branch summary yet)')
+    textSections.push(``, `=== RECENT COMMITS ===`, commits || '(none)')
+    textSections.push(``, `=== OPEN THREADS ===`, threadsSectionText)
+    textSections.push(``, `=== ACTIVE CLAIMS ===`, claimsSectionText)
+    return textSections.join('\n')
   }
 }
