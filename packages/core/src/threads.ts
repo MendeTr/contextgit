@@ -9,6 +9,15 @@
 
 import type { Thread } from './types.js'
 
+/**
+ * Canonical form of a thread subject for dedupe-on-save (02 DELTA, spec §A).
+ * Trim, lowercase, collapse internal whitespace. Two subjects are duplicates
+ * iff their normalized forms are equal.
+ */
+export function normalizeThreadSubject(subject: string): string {
+  return subject.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 export interface ThreadReader {
   listOpenThreads(projectId: string): Promise<Thread[]>
   listOpenThreadsByBranch(branchId: string): Promise<Thread[]>
