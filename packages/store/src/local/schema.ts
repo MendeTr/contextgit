@@ -172,3 +172,24 @@ export const SCHEMA_V6_DDL = [
   `ALTER TABLE threads ADD COLUMN kind TEXT NOT NULL DEFAULT 'open'`,
   `ALTER TABLE threads ADD COLUMN last_touched_commit TEXT REFERENCES commits(id)`,
 ]
+
+// Migration v7 adds the trace table — fine tier (02 DELTA).
+// Append-only, pull-only. NEVER included in default project_memory_load.
+// Retrieved via project_memory_retrieve with explicit window+offset.
+// git_commit_sha is optional — a trace note can predate its commit or stand alone.
+export const CREATE_TRACE = `
+CREATE TABLE IF NOT EXISTS trace (
+  id             TEXT PRIMARY KEY,
+  project_id     TEXT NOT NULL REFERENCES projects(id),
+  branch_id      TEXT NOT NULL REFERENCES branches(id),
+  note           TEXT NOT NULL,
+  git_commit_sha TEXT,
+  created_at     INTEGER NOT NULL
+)
+`
+
+export const SCHEMA_V7_DDL = [
+  CREATE_TRACE,
+  `CREATE INDEX IF NOT EXISTS idx_trace_project ON trace(project_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_trace_branch  ON trace(branch_id, created_at DESC)`,
+]
