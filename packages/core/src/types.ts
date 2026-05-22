@@ -109,7 +109,8 @@ export interface Thread {
   closedNote?: string
   createdAt: Date
   updatedAt?: Date
-  stale?: boolean            // derived at read time — not stored
+  stale?: boolean            // derived at read time — applies to kind='open' only
+  expired?: boolean          // derived at read time — applies to kind='watch' only
 }
 
 export interface TraceEntry {
