@@ -69,8 +69,10 @@ interface ThreadRow {
   branch_id: string
   description: string
   status: string
+  kind: string
   workflow_type: string | null
   opened_in_commit: string
+  last_touched_commit: string | null
   closed_in_commit: string | null
   closed_note: string | null
   created_at: number
@@ -159,8 +161,10 @@ function toThread(row: ThreadRow): Thread {
     branchId: row.branch_id,
     description: row.description,
     status: row.status as Thread['status'],
+    kind: row.kind as Thread['kind'],
     workflowType: row.workflow_type as Thread['workflowType'] ?? undefined,
     openedInCommit: row.opened_in_commit,
+    lastTouchedCommit: row.last_touched_commit ?? undefined,
     closedInCommit: row.closed_in_commit ?? undefined,
     closedNote: row.closed_note ?? undefined,
     createdAt: new Date(row.created_at),
@@ -300,19 +304,19 @@ export class Queries {
       // Threads
       insertThread: db.prepare(`
         INSERT INTO threads
-          (id, project_id, branch_id, description, status, workflow_type,
-           opened_in_commit, created_at)
+          (id, project_id, branch_id, description, status, kind, workflow_type,
+           opened_in_commit, last_touched_commit, created_at)
         VALUES
-          (@id, @project_id, @branch_id, @description, 'open', @workflow_type,
-           @opened_in_commit, @created_at)
+          (@id, @project_id, @branch_id, @description, 'open', @kind, @workflow_type,
+           @opened_in_commit, @opened_in_commit, @created_at)
       `),
       syncThread: db.prepare(`
         INSERT OR IGNORE INTO threads
-          (id, project_id, branch_id, description, status, workflow_type,
-           opened_in_commit, created_at)
+          (id, project_id, branch_id, description, status, kind, workflow_type,
+           opened_in_commit, last_touched_commit, created_at)
         VALUES
-          (@id, @project_id, @branch_id, @description, @status, @workflow_type,
-           @opened_in_commit, @created_at)
+          (@id, @project_id, @branch_id, @description, @status, @kind, @workflow_type,
+           @opened_in_commit, @last_touched_commit, @created_at)
       `),
       closeThread: db.prepare(`
         UPDATE threads
@@ -547,6 +551,7 @@ export class Queries {
     branchId: string,
     openedInCommit: string,
     workflowType: string | null,
+    kind: Thread['kind'] = 'open',
   ): Thread {
     const now = Date.now()
     this.stmts.insertThread.run({
@@ -554,6 +559,7 @@ export class Queries {
       project_id: projectId,
       branch_id: branchId,
       description,
+      kind,
       workflow_type: workflowType,
       opened_in_commit: openedInCommit,
       created_at: now,
@@ -564,8 +570,10 @@ export class Queries {
       branchId,
       description,
       status: 'open',
+      kind,
       workflowType: workflowType as Thread['workflowType'] ?? undefined,
       openedInCommit,
+      lastTouchedCommit: openedInCommit,
       createdAt: new Date(now),
     }
   }
@@ -577,8 +585,10 @@ export class Queries {
       branch_id: thread.branchId,
       description: thread.description,
       status: thread.status,
+      kind: thread.kind ?? 'open',
       workflow_type: thread.workflowType ?? null,
       opened_in_commit: thread.openedInCommit,
+      last_touched_commit: thread.lastTouchedCommit ?? thread.openedInCommit,
       created_at: thread.createdAt.getTime(),
     })
     return thread
