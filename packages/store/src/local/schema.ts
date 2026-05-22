@@ -163,3 +163,12 @@ export const SCHEMA_V5_DDL = [
   `CREATE TRIGGER IF NOT EXISTS threads_updated_at AFTER UPDATE ON threads BEGIN UPDATE threads SET updated_at = unixepoch() * 1000 WHERE id = NEW.id; END`,
   `ALTER TABLE claims ADD COLUMN thread_id TEXT REFERENCES threads(id)`,
 ]
+
+// Migration v6 adds kind and last_touched_commit to threads — granularity tier (02 DELTA).
+// kind defaults to 'open' to preserve existing thread semantics. last_touched_commit
+// is nullable; the decay logic treats NULL as "never touched after open" and falls
+// back to opened_in_commit for distance calculations.
+export const SCHEMA_V6_DDL = [
+  `ALTER TABLE threads ADD COLUMN kind TEXT NOT NULL DEFAULT 'open'`,
+  `ALTER TABLE threads ADD COLUMN last_touched_commit TEXT REFERENCES commits(id)`,
+]

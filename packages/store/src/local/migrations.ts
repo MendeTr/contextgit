@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
 
 interface MigrationRow {
   version: number
@@ -78,6 +78,15 @@ const MIGRATIONS: Migration[] = [
     name: 'multiagent_coordination',
     run(db) {
       for (const sql of SCHEMA_V5_DDL) {
+        db.exec(sql)
+      }
+    },
+  },
+  {
+    version: 6,
+    name: 'threads_granularity',
+    run(db) {
+      for (const sql of SCHEMA_V6_DDL) {
         db.exec(sql)
       }
     },
