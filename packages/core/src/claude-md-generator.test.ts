@@ -76,7 +76,7 @@ describe('ClaudeMdGenerator', () => {
       expect(written).not.toContain('Old content.')
     })
 
-    it('writes CLAUDE.contextgit.md when CLAUDE.md exists and was NOT auto-generated', async () => {
+    it('wires @-include as first line of CLAUDE.md and preserves original content', async () => {
       writeFileSync(join(tmpDir, 'CLAUDE.md'), '# My manually written CLAUDE.md\nDo not overwrite.')
 
       const result = await generator.write(tmpDir, {
@@ -86,11 +86,34 @@ describe('ClaudeMdGenerator', () => {
       })
       expect(result.file).toBe('CLAUDE.contextgit.md')
       expect(result.warning).toBeDefined()
-      expect(result.warning).toContain('@CLAUDE.contextgit.md')
-      // Original CLAUDE.md untouched
-      expect(readFileSync(join(tmpDir, 'CLAUDE.md'), 'utf-8')).toContain('Do not overwrite.')
-      // New file created
+      expect(result.warning).toContain('wired into CLAUDE.md')
+      // @-include wired as first line
+      const claudeContent = readFileSync(join(tmpDir, 'CLAUDE.md'), 'utf-8')
+      expect(claudeContent.split('\n')[0]).toBe('@CLAUDE.contextgit.md')
+      // Original content preserved below
+      expect(claudeContent).toContain('Do not overwrite.')
+      // Sidecar created
       expect(existsSync(join(tmpDir, 'CLAUDE.contextgit.md'))).toBe(true)
+    })
+
+    it('wires @-include exactly once when write() is called twice', async () => {
+      writeFileSync(join(tmpDir, 'CLAUDE.md'), '# Manual content')
+
+      await generator.write(tmpDir, { projectName: 'P', content: 'c1', timestamp: new Date() })
+      await generator.write(tmpDir, { projectName: 'P', content: 'c2', timestamp: new Date() })
+
+      const content = readFileSync(join(tmpDir, 'CLAUDE.md'), 'utf-8')
+      const occurrences = content.split('@CLAUDE.contextgit.md').length - 1
+      expect(occurrences).toBe(1)
+    })
+
+    it('does not modify CLAUDE.md when @-include is already present', async () => {
+      const initial = '@CLAUDE.contextgit.md\n\n# Manual content'
+      writeFileSync(join(tmpDir, 'CLAUDE.md'), initial)
+
+      await generator.write(tmpDir, { projectName: 'P', content: 'new content', timestamp: new Date() })
+
+      expect(readFileSync(join(tmpDir, 'CLAUDE.md'), 'utf-8')).toBe(initial)
     })
 
     it('updates CLAUDE.contextgit.md if it already exists from a previous run', async () => {
