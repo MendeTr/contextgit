@@ -211,14 +211,26 @@ export interface ClaimInput {
 // Session Snapshot
 // ============================================
 
+export interface Roadmap {
+  intent: string               // why this is being built
+  nextTask: string             // the concrete next-task pointer
+  decisionRationale: string    // rationale that does not live in commit messages
+}
+
 export interface SessionSnapshot {
-  projectSummary: string       // max 2000 tokens
-  branchName: string
+  projectSummary: string       // max 2000 tokens (legacy; prefer Roadmap going forward)
+  branchName: string           // populated live from git at load time
   branchSummary: string        // max 500 tokens
-  recentCommits: Commit[]      // last 3
+  recentCommits: Commit[]      // sized by commitWindow on project_memory_load (default 5)
   openThreads: Thread[]
   activeClaims: Claim[]        // non-released, non-TTL-expired claims
   isInitiated: boolean         // true when the project has at least one commit
+  // 02 DELTA additions — all optional until populated by load/decay logic:
+  roadmap?: Roadmap            // structured intent + next-task + rationale
+  staleThreadCount?: number    // open threads filtered out by decay (age or commit-distance)
+  expiredWatchCount?: number   // watch notes filtered out by TTL
+  headSha?: string             // populated live from git at load time
+  commitCount?: number         // populated live from git at load time
 }
 
 export interface ContextDelta {
