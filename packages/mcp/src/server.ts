@@ -636,5 +636,66 @@ Call after a context branch experiment succeeds and you want to preserve the fin
     },
   )
 
+  // ── project_memory_threads — review decayed threads (02 DELTA Step 3) ──────
+
+  const handleProjectMemoryThreads = async ({ filter }: { filter?: 'all' | 'stale' | 'expired-watch' | 'live' }) => {
+    try {
+      const threads = await ctx.store.listOpenThreads(ctx.projectId)
+      const selected = threads.filter((t) => {
+        if (filter === 'stale') return t.stale === true
+        if (filter === 'expired-watch') return t.expired === true
+        if (filter === 'live') return !t.stale && !t.expired
+        return true // 'all' or undefined
+      })
+
+      if (selected.length === 0) {
+        return {
+          content: [{ type: 'text' as const, text: `No threads match filter '${filter ?? 'all'}'.` }],
+        }
+      }
+
+      const lines = selected.map((t) => {
+        const flag = t.stale ? '[STALE]' : t.expired ? '[EXPIRED-WATCH]' : '[LIVE]'
+        const kind = t.kind ?? 'open'
+        const opened = t.createdAt.toISOString().slice(0, 10)
+        const touched = t.lastTouchedCommit ? ` last_touched=${t.lastTouchedCommit.slice(0, 8)}` : ''
+        return `- ${flag} (${kind}) ${t.description}  (opened ${opened}${touched})`
+      })
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `${selected.length} thread(s) matching filter '${filter ?? 'all'}':\n${lines.join('\n')}`,
+          },
+        ],
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return {
+        content: [{ type: 'text' as const, text: `Error listing threads: ${message}` }],
+        isError: true,
+      }
+    }
+  }
+
+  const projectMemoryThreadsSchema = {
+    filter: z
+      .enum(['all', 'stale', 'expired-watch', 'live'])
+      .default('all')
+      .describe(
+        "Filter the result. 'stale' = open threads past decay threshold; 'expired-watch' = watch notes past TTL; 'live' = neither (what the default load returns); 'all' = everything with decay flags annotated.",
+      ),
+  }
+
+  server.tool(
+    'project_memory_threads',
+    `Review open threads with their decay status. Use to inspect the stale and expired-watch threads that the default project_memory_load filters out.
+
+When project_memory_load returns a "(+N stale, +M expired-watch ...)" hint, this is the tool that shows them. Stale open threads can be triaged (close them, or touch them by saving with the same subject). Expired watch notes are auto-dropped — they only show up here for awareness.`,
+    projectMemoryThreadsSchema,
+    handleProjectMemoryThreads,
+  )
+
   return server
 }
