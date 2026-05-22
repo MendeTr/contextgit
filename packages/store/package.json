@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@contextgit/core": "0.1.9",
+    "@contextgit/core": "0.1.10",
     "@supabase/supabase-js": "^2.99.2",
     "better-sqlite3": "^9.4.0",
     "nanoid": "^5.0.0",
