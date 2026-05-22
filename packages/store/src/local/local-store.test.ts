@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { LocalStore } from './index.js'
+
+/** Advance the mocked clock by 1 minute. Use between commits in decay tests so each gets a distinct created_at. */
+function tick(): void {
+  vi.setSystemTime(new Date(Date.now() + 60_000))
+}
 
 describe('LocalStore (in-memory)', () => {
   let store: LocalStore
@@ -337,98 +342,183 @@ describe('LocalStore (in-memory)', () => {
   })
 
   it('flags an open thread as stale once enough branch commits accrue past its touch', async () => {
-    const project = await store.createProject({ name: 'p' })
-    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
-    await store.upsertAgent({
-      id: 'agent-1',
-      projectId: project.id,
-      role: 'dev',
-      tool: 'claude-code',
-      workflowType: 'interactive',
-    })
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
+    try {
+      const project = await store.createProject({ name: 'p' })
+      const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+      await store.upsertAgent({
+        id: 'agent-1',
+        projectId: project.id,
+        role: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+      })
 
-    // Open the thread on commit #1
-    await store.createCommit({
-      branchId: branch.id,
-      agentId: 'agent-1',
-      agentRole: 'dev',
-      tool: 'claude-code',
-      workflowType: 'interactive',
-      message: 'open',
-      content: 'c',
-      summary: 's',
-      commitType: 'manual',
-      threads: { open: ['the stale-soon thread'] },
-    })
-
-    const before = await store.listOpenThreads(project.id)
-    expect(before).toHaveLength(1)
-    expect(before[0].stale).toBeUndefined()
-
-    // Pile on enough subsequent commits to cross the 30-commit branch threshold
-    for (let i = 0; i < 31; i++) {
       await store.createCommit({
         branchId: branch.id,
         agentId: 'agent-1',
         agentRole: 'dev',
         tool: 'claude-code',
         workflowType: 'interactive',
-        message: `noise ${i}`,
+        message: 'open',
         content: 'c',
         summary: 's',
         commitType: 'manual',
+        threads: { open: ['the stale-soon thread'] },
       })
-    }
 
-    const after = await store.listOpenThreads(project.id)
-    expect(after).toHaveLength(1)
-    expect(after[0].stale).toBe(true)
-    expect(after[0].expired).toBeUndefined()
+      const before = await store.listOpenThreads(project.id)
+      expect(before).toHaveLength(1)
+      expect(before[0].stale).toBeUndefined()
+
+      for (let i = 0; i < 31; i++) {
+        tick()
+        await store.createCommit({
+          branchId: branch.id,
+          agentId: 'agent-1',
+          agentRole: 'dev',
+          tool: 'claude-code',
+          workflowType: 'interactive',
+          message: `noise ${i}`,
+          content: 'c',
+          summary: 's',
+          commitType: 'manual',
+        })
+      }
+
+      const after = await store.listOpenThreads(project.id)
+      expect(after).toHaveLength(1)
+      expect(after[0].stale).toBe(true)
+      expect(after[0].expired).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('flags a watch thread as expired once branch commits past its touch hit the watch threshold', async () => {
-    const project = await store.createProject({ name: 'p' })
-    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
-    await store.upsertAgent({
-      id: 'agent-1',
-      projectId: project.id,
-      role: 'dev',
-      tool: 'claude-code',
-      workflowType: 'interactive',
-    })
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
+    try {
+      const project = await store.createProject({ name: 'p' })
+      const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+      await store.upsertAgent({
+        id: 'agent-1',
+        projectId: project.id,
+        role: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+      })
 
-    await store.createCommit({
-      branchId: branch.id,
-      agentId: 'agent-1',
-      agentRole: 'dev',
-      tool: 'claude-code',
-      workflowType: 'interactive',
-      message: 'open watch',
-      content: 'c',
-      summary: 's',
-      commitType: 'manual',
-      threads: { open: [{ subject: 'watch this', kind: 'watch' }] },
-    })
-
-    for (let i = 0; i < 16; i++) {
       await store.createCommit({
         branchId: branch.id,
         agentId: 'agent-1',
         agentRole: 'dev',
         tool: 'claude-code',
         workflowType: 'interactive',
-        message: `noise ${i}`,
+        message: 'open watch',
         content: 'c',
         summary: 's',
         commitType: 'manual',
+        threads: { open: [{ subject: 'watch this', kind: 'watch' }] },
       })
-    }
 
-    const after = await store.listOpenThreads(project.id)
-    expect(after).toHaveLength(1)
-    expect(after[0].kind).toBe('watch')
-    expect(after[0].expired).toBe(true)
-    expect(after[0].stale).toBeUndefined()
+      for (let i = 0; i < 16; i++) {
+        tick()
+        await store.createCommit({
+          branchId: branch.id,
+          agentId: 'agent-1',
+          agentRole: 'dev',
+          tool: 'claude-code',
+          workflowType: 'interactive',
+          message: `noise ${i}`,
+          content: 'c',
+          summary: 's',
+          commitType: 'manual',
+        })
+      }
+
+      const after = await store.listOpenThreads(project.id)
+      expect(after).toHaveLength(1)
+      expect(after[0].kind).toBe('watch')
+      expect(after[0].expired).toBe(true)
+      expect(after[0].stale).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('curates getSessionSnapshot: filters stale + expired threads and sets counts', async () => {
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
+    try {
+      const project = await store.createProject({ name: 'p' })
+      const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+      await store.upsertAgent({
+        id: 'agent-1',
+        projectId: project.id,
+        role: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+      })
+
+      // Open one open thread that will go stale, one watch that will expire, and one live open
+      await store.createCommit({
+        branchId: branch.id,
+        agentId: 'agent-1',
+        agentRole: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+        message: 'open three',
+        content: 'c',
+        summary: 's',
+        commitType: 'manual',
+        threads: {
+          open: [
+            'will go stale',
+            { subject: 'will expire', kind: 'watch' },
+            'will stay live',
+          ],
+        },
+      })
+
+      // Push enough noise to age out the first two but keep #3 live by touching it
+      for (let i = 0; i < 31; i++) {
+        tick()
+        await store.createCommit({
+          branchId: branch.id,
+          agentId: 'agent-1',
+          agentRole: 'dev',
+          tool: 'claude-code',
+          workflowType: 'interactive',
+          message: `noise ${i}`,
+          content: 'c',
+          summary: 's',
+          commitType: 'manual',
+        })
+      }
+
+      // Touch the live one on the most recent commit so it doesn't go stale
+      tick()
+      await store.createCommit({
+        branchId: branch.id,
+        agentId: 'agent-1',
+        agentRole: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+        message: 'touch the live thread',
+        content: 'c',
+        summary: 's',
+        commitType: 'manual',
+        threads: { open: ['will stay live'] },
+      })
+
+      const snapshot = await store.getSessionSnapshot(project.id, branch.id)
+
+      expect(snapshot.staleThreadCount).toBe(1)
+      expect(snapshot.expiredWatchCount).toBe(1)
+      expect(snapshot.openThreads).toHaveLength(1)
+      expect(snapshot.openThreads[0].description).toBe('will stay live')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('opens distinct threads when normalized subjects differ', async () => {

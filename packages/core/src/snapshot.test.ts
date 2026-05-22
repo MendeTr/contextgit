@@ -185,4 +185,33 @@ describe('SnapshotFormatter inline claim status', () => {
     const count = (out.match(/duplicated thread/g) ?? []).length
     expect(count).toBe(1)
   })
+
+  it('agents-md appends a decay count line when stale or expired counts are non-zero', () => {
+    const snapshot = makeSnapshot({ staleThreadCount: 12, expiredWatchCount: 7 })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).toContain('+12 stale')
+    expect(out).toContain('+7 expired-watch')
+    expect(out).toContain('call project_memory_threads to view')
+  })
+
+  it('agents-md omits the decay count line when counts are zero or missing', () => {
+    const snapshot = makeSnapshot()
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).not.toContain('project_memory_threads')
+    expect(out).not.toContain('stale')
+    expect(out).not.toContain('expired-watch')
+  })
+
+  it('agents-md count line includes only the non-zero count when one side is empty', () => {
+    const snapshot = makeSnapshot({ staleThreadCount: 4, expiredWatchCount: 0 })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).toContain('+4 stale')
+    expect(out).not.toContain('expired-watch')
+  })
+
+  it('text format also shows the decay count line', () => {
+    const snapshot = makeSnapshot({ staleThreadCount: 3, expiredWatchCount: 0 })
+    const out = formatter.format(snapshot, 'text')
+    expect(out).toContain('+3 stale')
+  })
 })

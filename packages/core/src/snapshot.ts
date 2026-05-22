@@ -12,6 +12,16 @@ function claimLabel(thread: Thread, activeClaims: Claim[]): string {
   return match ? `[CLAIMED by ${match.agentId}]` : '[FREE]'
 }
 
+function decayCountLine(staleCount: number | undefined, expiredCount: number | undefined): string | null {
+  const stale = staleCount ?? 0
+  const expired = expiredCount ?? 0
+  if (stale === 0 && expired === 0) return null
+  const parts: string[] = []
+  if (stale > 0) parts.push(`+${stale} stale`)
+  if (expired > 0) parts.push(`+${expired} expired-watch`)
+  return `(${parts.join(', ')} — call project_memory_threads to view)`
+}
+
 export class SnapshotFormatter {
   format(snapshot: SessionSnapshot, fmt: SnapshotFormat): string {
     const { projectSummary, branchName, branchSummary, recentCommits, openThreads, activeClaims } = snapshot
@@ -19,6 +29,8 @@ export class SnapshotFormatter {
     if (fmt === 'json') {
       return JSON.stringify(snapshot, null, 2)
     }
+
+    const countLine = decayCountLine(snapshot.staleThreadCount, snapshot.expiredWatchCount)
 
     if (fmt === 'agents-md') {
       const uniqueThreads = [...new Map(openThreads.map((t) => [t.id, t])).values()]
@@ -34,12 +46,13 @@ export class SnapshotFormatter {
             `- ${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
         )
         .join('\n')
+      const threadsSection = countLine ? `${threads || '(none)'}\n${countLine}` : (threads || '(none)')
       return [
         `## Project State`,
         projectSummary || '(no summary yet)',
         ``,
         `## Open Threads`,
-        threads || '(none)',
+        threadsSection,
         ``,
         `## Recent Activity`,
         commits || '(no commits yet)',
@@ -69,6 +82,7 @@ export class SnapshotFormatter {
           `${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
       )
       .join('\n')
+    const threadsSectionText = countLine ? `${threads || '(none)'}\n${countLine}` : (threads || '(none)')
 
     return [
       `=== PROJECT STATE ===`,
@@ -81,7 +95,7 @@ export class SnapshotFormatter {
       commits || '(none)',
       ``,
       `=== OPEN THREADS ===`,
-      threads || '(none)',
+      threadsSectionText,
       ``,
       `=== ACTIVE CLAIMS ===`,
       activeClaims.length

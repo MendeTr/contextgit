@@ -772,8 +772,26 @@ export class Queries {
       ? (this.stmts.selectCommitsByRole.all(branchId, options.agentRole, 3) as CommitRow[]).map(toCommit)
       : this.listCommits(branchId, { limit: 3, offset: 0 })
 
-    // All open threads for the project
-    const openThreads = this.listOpenThreads(projectId)
+    // All open threads (decorated with stale/expired flags by listOpenThreads).
+    // The default snapshot returns only live threads — the curated load (02 DELTA §B/§C):
+    //   • kind='open' threads filtered out when stale=true → counted in staleThreadCount
+    //   • kind='watch' threads filtered out when expired=true → counted in expiredWatchCount
+    // Stale/expired threads stay retrievable via project_memory_threads tool (Step 5).
+    const allOpenThreads = this.listOpenThreads(projectId)
+    let staleThreadCount = 0
+    let expiredWatchCount = 0
+    const openThreads: Thread[] = []
+    for (const t of allOpenThreads) {
+      if (t.stale) {
+        staleThreadCount++
+        continue
+      }
+      if (t.expired) {
+        expiredWatchCount++
+        continue
+      }
+      openThreads.push(t)
+    }
 
     const activeClaims = this.listActiveClaims(projectId)
 
@@ -790,6 +808,8 @@ export class Queries {
       openThreads,
       activeClaims,
       isInitiated,
+      staleThreadCount,
+      expiredWatchCount,
     }
   }
 
