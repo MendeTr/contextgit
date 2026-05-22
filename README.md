@@ -31,24 +31,27 @@ When an agent calls `project_memory_load`, it gets a snapshot like this:
 ## Project State
 Auth module complete. API routes tested. Database schema finalized.
 
-## Current Branch: Context: main
-Implementing payment integration. Stripe SDK configured.
-
-## Recent Activity
-- [2026-03-20T08:33:44Z] "Payment webhook handler done" by solo via claude-code
-- [2026-03-20T07:15:22Z] "Stripe SDK integration" by solo via claude-code
-- [2026-03-19T16:42:11Z] "Auth module complete" by solo via claude-code
+## Git
+Branch: feature/payments | HEAD: a1b2c3d4 | 47 commits
 
 ## Open Threads
-- [FREE] Need to add rate limiting to payment endpoints
-- [CLAIMED by studio-mcp-agent] Build invoice PDF generation
-- [FREE] Decide on webhook retry strategy
+- [FREE] Need to add rate limiting to payment endpoints  (opened 5/21/2026, interactive)
+- [CLAIMED by studio-mcp-agent] Build invoice PDF generation  (opened 5/20/2026, interactive)
+- [FREE] Decide on webhook retry strategy  (opened 5/19/2026, interactive)
+(+3 stale, +1 expired-watch — call project_memory_threads to view)
+
+## Recent Activity
+- [2026-05-22T08:33:44Z] "Payment webhook handler done" by solo via claude-code (interactive)
+- [2026-05-22T07:15:22Z] "Stripe SDK integration" by solo via claude-code (interactive)
+- [2026-05-21T16:42:11Z] "Auth module complete" by solo via claude-code (interactive)
 
 ## Active Claims
-- "Build invoice PDF generation" claimed by studio-mcp-agent (2h TTL)
+- [CLAIMED by studio-mcp-agent] Build invoice PDF generation (claimed 2026-05-22T09:00:00Z)
 ```
 
 The agent reads this and knows exactly where the project stands without you saying a word.
+
+The `## Git` line is read live from git on every load — branch, HEAD, and commit count are never cached. The count hint under `## Open Threads` surfaces decayed entries that have been filtered from the default load (stale open threads + expired watch notes) so the agent can drill in with `project_memory_threads` if needed.
 
 ## MCP tools
 
@@ -56,8 +59,11 @@ These tools are exposed to the agent via MCP. The agent calls them as part of it
 
 | Tool | What it does |
 |------|-------------|
-| `project_memory_load` | Load the full project snapshot — what was built, what's decided, open threads, active claims. Call at session start. |
-| `project_memory_save` | Save a context commit — what you did, decisions made, open questions. Call before ending a session. |
+| `project_memory_load` | Load the full project snapshot — what was built, what's decided, live open threads, active claims, plus live git facts (HEAD, commit count). Call at session start. Optional `commit_window` (default 5) controls how many recent commits to include. |
+| `project_memory_save` | Save a context commit — what you did, decisions made, open questions. Call at session end. Threads can be opened as `'open'` (the default — committed) or `'watch'` (a TTL-expiring reminder). |
+| `project_memory_threads` | List threads with `filter='stale' \| 'expired-watch' \| 'live' \| 'all'`. Use to inspect what the default load filtered out — stale open threads and expired watch notes. |
+| `project_memory_retrieve` | Windowed scroll-back. `tier='commits' \| 'trace'`, `window` (default 10), `offset` (default 0). The way to read past the load's recent-commits window or to read the trace tier. |
+| `project_memory_trace` | Record a step-level reasoning note in the fine tier — decisions considered and rejected, dead ends. Pull-only: NEVER appears in `project_memory_load` output. |
 | `context_search` | Semantic + full-text search over past context commits. |
 | `project_task_claim` | Claim a task so other agents skip it. Claims auto-expire after 2 hours. |
 | `project_task_unclaim` | Release a claimed task. |
