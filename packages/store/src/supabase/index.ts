@@ -358,7 +358,7 @@ export class SupabaseStore implements ContextStore {
   async getSessionSnapshot(
     projectId: string,
     branchId: string,
-    options?: { agentRole?: AgentRole },
+    options?: { agentRole?: AgentRole; commitWindow?: number },
   ): Promise<SessionSnapshot> {
     const branch = await this.getBranch(branchId)
     if (!branch) throw new Error(`Branch not found: ${branchId}`)
@@ -381,11 +381,12 @@ export class SupabaseStore implements ContextStore {
       }
     }
 
-    // Recent commits (role-filtered if requested)
+    // Recent commits (role-filtered if requested) — windowed via 02 DELTA commitWindow (default 5).
+    const commitWindow = options?.commitWindow ?? 5
     let commitsQuery = this.db.from('commits').select('*')
       .eq('branch_id', branchId)
       .order('created_at', { ascending: false })
-      .limit(3)
+      .limit(commitWindow)
     if (options?.agentRole) {
       commitsQuery = (commitsQuery as unknown as { eq: (k: string, v: string) => typeof commitsQuery })
         .eq('agent_role', options.agentRole) as typeof commitsQuery

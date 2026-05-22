@@ -292,7 +292,7 @@ export class LocalStore implements ContextStore {
 
   // ─── Snapshots ────────────────────────────────────────────────────────────
 
-  getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: import('@contextgit/core').AgentRole }): Promise<SessionSnapshot> {
+  getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: import('@contextgit/core').AgentRole; commitWindow?: number }): Promise<SessionSnapshot> {
     try {
       return Promise.resolve(this.q.getSessionSnapshot(projectId, branchId, options))
     } catch (e) {

@@ -822,7 +822,7 @@ export class Queries {
 
   // ─── Session snapshot helpers ─────────────────────────────────────────────
 
-  getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: string }): SessionSnapshot {
+  getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: string; commitWindow?: number }): SessionSnapshot {
     // Project summary: head commit summary of the 'main' branch
     const mainBranch = this.getBranchByGitName(projectId, 'main')
       ?? this.getBranchByGitName(projectId, 'master')
@@ -837,10 +837,11 @@ export class Queries {
       ? (this.getCommit(branch.headCommitId)?.summary ?? '')
       : ''
 
-    // Last 3 commits on current branch (optionally filtered by agent role)
+    // Recent commits on current branch — windowed via 02 DELTA commitWindow (default 5).
+    const commitWindow = options?.commitWindow ?? 5
     const recentCommits = options?.agentRole
-      ? (this.stmts.selectCommitsByRole.all(branchId, options.agentRole, 3) as CommitRow[]).map(toCommit)
-      : this.listCommits(branchId, { limit: 3, offset: 0 })
+      ? (this.stmts.selectCommitsByRole.all(branchId, options.agentRole, commitWindow) as CommitRow[]).map(toCommit)
+      : this.listCommits(branchId, { limit: commitWindow, offset: 0 })
 
     // All open threads (decorated with stale/expired flags by listOpenThreads).
     // The default snapshot returns only live threads — the curated load (02 DELTA §B/§C):

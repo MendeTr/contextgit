@@ -161,7 +161,12 @@ export function createStoreRouter(store: ContextStore): Router {
       const branchId = String(req.query['branchId'] ?? '')
       if (!branchId) { res.status(400).json({ error: "'branchId' query param required" }); return }
       const agentRole = req.query['agentRole'] ? String(req.query['agentRole']) : undefined
-      const result = await store.getSessionSnapshot(projectId, branchId, agentRole ? { agentRole: agentRole as import('@contextgit/core').AgentRole } : undefined)
+      const commitWindowRaw = req.query['commitWindow']
+      const commitWindow = commitWindowRaw != null ? Number(commitWindowRaw) : undefined
+      const opts: { agentRole?: import('@contextgit/core').AgentRole; commitWindow?: number } = {}
+      if (agentRole) opts.agentRole = agentRole as import('@contextgit/core').AgentRole
+      if (commitWindow != null && !Number.isNaN(commitWindow)) opts.commitWindow = commitWindow
+      const result = await store.getSessionSnapshot(projectId, branchId, Object.keys(opts).length ? opts : undefined)
       res.json(result)
     } catch (e) { err(res, e) }
   })

@@ -249,6 +249,47 @@ describe('LocalStore (in-memory)', () => {
     expect(mainThreads[0].description).toBe('Thread from feat')
   })
 
+  it('getSessionSnapshot respects commitWindow option (default 5, custom honored)', async () => {
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
+    try {
+      const project = await store.createProject({ name: 'p' })
+      const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+      await store.upsertAgent({
+        id: 'agent-1',
+        projectId: project.id,
+        role: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+      })
+
+      for (let i = 0; i < 10; i++) {
+        tick()
+        await store.createCommit({
+          branchId: branch.id,
+          agentId: 'agent-1',
+          agentRole: 'dev',
+          tool: 'claude-code',
+          workflowType: 'interactive',
+          message: `commit ${i}`,
+          content: 'c',
+          summary: 's',
+          commitType: 'manual',
+        })
+      }
+
+      const defaultSnap = await store.getSessionSnapshot(project.id, branch.id)
+      expect(defaultSnap.recentCommits).toHaveLength(5)
+
+      const windowed = await store.getSessionSnapshot(project.id, branch.id, { commitWindow: 8 })
+      expect(windowed.recentCommits).toHaveLength(8)
+
+      const tiny = await store.getSessionSnapshot(project.id, branch.id, { commitWindow: 2 })
+      expect(tiny.recentCommits).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('appends and lists trace entries in reverse-chronological order with paging', async () => {
     const project = await store.createProject({ name: 'p' })
     const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })

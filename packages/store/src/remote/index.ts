@@ -190,9 +190,10 @@ export class RemoteStore implements ContextStore {
 
   // ── Snapshots ────────────────────────────────────────────────────────────────
 
-  async getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: string }): Promise<SessionSnapshot> {
+  async getSessionSnapshot(projectId: string, branchId: string, options?: { agentRole?: string; commitWindow?: number }): Promise<SessionSnapshot> {
     let qs = `branchId=${encodeURIComponent(branchId)}`
     if (options?.agentRole) qs += `&agentRole=${encodeURIComponent(options.agentRole)}`
+    if (options?.commitWindow != null) qs += `&commitWindow=${options.commitWindow}`
     const raw = await this.req<{
       projectSummary: string
       branchName: string
