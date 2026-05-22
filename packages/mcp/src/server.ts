@@ -707,6 +707,63 @@ Call after a context branch experiment succeeds and you want to preserve the fin
       ),
   }
 
+  // ── project_memory_trace — append a fine-tier note (02 DELTA Step 5) ──────
+
+  const handleProjectMemoryTrace = async ({
+    note,
+    git_commit_sha,
+  }: {
+    note: string
+    git_commit_sha?: string
+  }) => {
+    try {
+      if (!ctx.store.appendTraceEntry) {
+        return {
+          content: [{ type: 'text' as const, text: `Trace tier is not supported by the current store backend.` }],
+          isError: true,
+        }
+      }
+      const entry = await ctx.store.appendTraceEntry({
+        projectId: ctx.projectId,
+        branchId: ctx.branchId,
+        note,
+        gitCommitSha: git_commit_sha,
+      })
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Trace entry recorded.\nID: ${entry.id}\n(Pull-only — call project_memory_retrieve with tier='trace' to review.)`,
+          },
+        ],
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return {
+        content: [{ type: 'text' as const, text: `Error recording trace entry: ${message}` }],
+        isError: true,
+      }
+    }
+  }
+
+  const projectMemoryTraceSchema = {
+    note: z.string().min(1).describe(
+      'A step-level reasoning note: a decision considered and rejected, a dead end, a "tried X, abandoned because Y". This is cold storage with an index — never auto-loaded, only retrieved on demand.',
+    ),
+    git_commit_sha: z.string().optional().describe(
+      'Optional git commit SHA to associate the note with. Omit if the note stands alone.',
+    ),
+  }
+
+  server.tool(
+    'project_memory_trace',
+    `Record a step-level trace note in the fine tier — decisions considered and rejected, dead ends, "tried X, abandoned because Y".
+
+This is the ContextGit analog of GCC's log.md. The trace tier is NEVER auto-loaded — it's pull-only, retrieved via project_memory_retrieve with tier='trace'. Use this when a decision matters below milestone granularity but doesn't belong in a commit message.`,
+    projectMemoryTraceSchema,
+    handleProjectMemoryTrace,
+  )
+
   // ── project_memory_retrieve — windowed scroll-back (02 DELTA Step 4) ──────
 
   const handleProjectMemoryRetrieve = async ({
