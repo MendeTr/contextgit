@@ -28,8 +28,23 @@ the **least valuable** tier — because git already stores it. The value is at t
 edges: a coarse always-current roadmap, and a fine-grained reasoning trace that is
 retrievable but never bloats the load.
 
-This spec restratifies ContextGit's memory into three tiers and adds a context
-budget to retrieval. It does **not** adopt GCC's plain-text-file store — see
+**Source 3 — a second Claude Code audit, run after `01` shipped.** With the save
+loop reconnected, the verdict improved to "net-positive, worth keeping" — the
+next-task pointer and decision rationale were genuinely useful. But it surfaced two
+new, concrete problems this spec must now address head-on:
+
+- The stored top-level summary (Project State / Architecture) was **stale and
+  actively misleading** — "3 commits on master" while the project was 100+ commits
+  deep on a feature branch. A stale summary is *worse than no summary* because it
+  primes the wrong mental model.
+- The open-thread list had grown to ~90 entries with **literal duplicates** (three
+  copies of one thread) and months-old speculative "watch for X" notes that were
+  never coming back. Signal-to-noise was poor enough that the agent scanned the
+  whole list to find the ~5 entries that mattered.
+
+This spec restratifies ContextGit's memory into three tiers, adds a context budget
+to retrieval, and — per Source 3 — makes pruning structural and first-class rather
+than an afterthought. It does **not** adopt GCC's plain-text-file store — see
 Non-Goals.
 
 ---
@@ -54,7 +69,7 @@ verbatim with the connectivity spec — keep the two identical.
 
 | Tier | Name | Resolution | Owns | Goes in default load? |
 |------|------|------------|------|----------------------|
-| Coarse | **Roadmap** | Project intent, milestones, open threads | "Where are we, what's unresolved" | Yes — always |
+| Coarse | **Roadmap** | Intent, next-task pointer, decision rationale, curated threads | "Where are we, what's unresolved, why" | Yes — generated fresh each load |
 | Middle | **Commits** | Per-commit milestone summary | "What changed, when" | No — git owns this |
 | Fine | **Trace** | Step-level reasoning notes | "Why we did/didn't do X" | No — pull-only, windowed |
 
@@ -64,11 +79,29 @@ retrievable without bloating context.**
 
 ### Coarse — Roadmap
 
-Already partly exists as `SessionSnapshot.projectSummary` + `openThreads`. The gap
-is that it is not *deliberately maintained* — it is a blob that gets rewritten
-wholesale on save. This spec gives it structure: a persistent project-level record
-of intent, current milestones, and the live open-thread set. It is the first thing
-`project_memory_load` returns and the thing most worth keeping small and current.
+Already partly exists as `SessionSnapshot.projectSummary` + `openThreads`. Source 3
+exposed the core defect: it is a **stored blob written once and never refreshed**,
+so it goes stale and actively misleads ("3 commits on master" on a 100+-commit
+branch).
+
+Two rules fix this:
+
+1. **The Roadmap is generated fresh on every `project_memory_load`, never served
+   from a stale store.** Volatile facts — current branch, commit count, HEAD — are
+   read live from git at load time, not stored. A fact that git can answer is never
+   cached in ContextGit; caching it is how it goes stale.
+
+2. **Architecture prose is dropped, not maintained.** Source 3 was explicit: a
+   prose "Architecture summary" describing the code is reconstructable from the
+   code, and a stale one is harmful. The codebase is the source of truth for
+   structure. ContextGit does not store an architecture description.
+
+What the Roadmap *does* keep is the irreducible part Source 3 found valuable: the
+**intent** (why this is being built), the **next concrete task** pointer, the
+**decision rationale** that does not live in commit messages, and the curated
+open-thread set. These exist nowhere else — see "Resolved decision" below. The
+Roadmap is the first thing `project_memory_load` returns and the thing most worth
+keeping small, current, and free of anything git can answer itself.
 
 ### Middle — Commits
 
@@ -111,34 +144,66 @@ This is small and high-value, and it is load-bearing for the decay work below.
 
 ---
 
-## Thread decay
+## Thread decay and pruning
 
-Claude Code's report: ~50 open threads on load, many stale (e.g. a thread for a
-feature that already shipped), no decay mechanism, and closing threads by hand "felt
-like friction" so it never happened. `ThreadManager` today is pure-read: it returns
-every open thread, unfiltered.
+This is the **headline of `0.2.0`**, not a tail feature. Source 3 found a ~90-entry
+open-thread list on the live install — duplicates, stale speculation, months-old
+items — costing real scan-time every single session. The install is hurting *now*.
+Build this before the trace tier.
 
-Decay must be **structural, not behavioral** — telling agents to close threads does
-not work; this session proved it. Three mechanisms, in order of build cost:
+`ThreadManager` today is pure-read: it returns every open thread, unfiltered. There
+is no dedupe, no decay, no notion of staleness. Source 3 named three distinct
+problems, and they need three distinct fixes.
 
-1. **Age-based staleness flag (cheap — ships with this spec).** `Thread` already has
-   `createdAt`. A thread untouched for N sessions (default 8) is marked `stale` in
-   the load — not deleted, just visually de-prioritized and excluded from the
-   default window. Agent can still retrieve stale threads explicitly.
+### Problem A — duplicates (a save-path bug, not a decay problem)
 
-2. **Commit-distance decay (needs a schema field — ships with this spec).** Add
-   `lastTouchedCommit` to the `Thread` type and `threads` table. A thread whose
-   `lastTouchedCommit` is more than N commits behind HEAD (default 30) is treated as
-   stale. Commit-distance is a better staleness signal than wall-clock age for
-   bursty solo work.
+Source 3 saw three literal copies of "Write Plan B Extension." That is not staleness
+— it is a missing uniqueness check on write. **Fix: dedupe-on-save.** When
+`project_memory_save` opens a thread, normalize its subject (trim, lowercase,
+collapse whitespace) and compare against existing open threads on the same project;
+if it matches, update the existing thread's `lastTouchedCommit` instead of inserting
+a duplicate. This ships first in `0.2.0` because it is small and stops the list
+growing today.
 
-3. **Auto-close on reference (post-launch — NOT this spec).** When a git commit
-   message or context save references the subject of an open thread, propose closing
-   it. This needs matching heuristics and a review step; deferred.
+### Problem B — speculative notes are not open threads
 
-The default `project_memory_load` returns: all non-stale open threads + a count of
-stale threads ("+12 stale threads — call project_memory_threads --stale to view").
-That keeps the load clean without losing data.
+The list mixed two things that should never have the same lifetime: genuine open
+threads ("the `regenerate_ac` silent-empty-AC bug" — a real unresolved decision)
+and speculative "watch for X" / "consider Y" notes that are reminders, not
+commitments. The second category accumulates forever because nothing ever formally
+"resolves" a vague watch-for.
+
+**Fix: a `kind` field on `Thread` — `'open' | 'watch'`.** A `watch` note carries a
+short TTL (default 3 sessions or 15 commits, whichever first) and is dropped silently
+on expiry — it was never a commitment. An `open` thread never expires on a timer;
+it decays to `stale` (below) but is preserved. The agent picks `kind` at save time;
+the save-rhythm guidance says decisions and unresolved problems are `open`,
+reminders are `watch`.
+
+### Problem C — genuine threads still go stale
+
+A real open thread for a feature that already shipped is stale but should not be
+deleted. Two staleness signals, both ship with this spec:
+
+1. **Age-based.** A thread untouched for N sessions (default 8) is flagged `stale`.
+2. **Commit-distance.** Add `lastTouchedCommit` to `Thread` and the `threads` table.
+   A thread more than N commits behind HEAD (default 30) is `stale`. Commit-distance
+   is the better signal for bursty solo work.
+
+`stale` is a read-time derived flag, not stored. Stale `open` threads are excluded
+from the default load but retrievable via `project_memory_threads --stale`.
+
+### Deferred — auto-close on reference (NOT this spec)
+
+When a commit message references a thread's subject, propose closing it. Needs
+matching heuristics and a review step; post-launch.
+
+### What the load returns
+
+The default `project_memory_load` returns: non-stale `open` threads + non-expired
+`watch` notes + a single honest count line ("+12 stale, +7 expired-watch — call
+project_memory_threads to view"). No 90-entry dump. The agent sees only what is
+live; nothing is lost, everything off-list is one explicit call away.
 
 ---
 
@@ -184,9 +249,9 @@ on the same trigger still fires on every commit. The `SessionStart` hook stays.
 - `project_memory_retrieve` — windowed scroll-back. Params: `tier`
   (`commits` | `trace`), `window` (default 10), `offset` (default 0). This is the
   ContextGit analog of GCC's `CONTEXT --branch` / `CONTEXT --log` sliding window.
-- `project_memory_threads` — list threads with a `--stale` filter. Gives the agent
-  (and the human) a way to review and bulk-close stale threads without it being
-  per-task friction.
+- `project_memory_threads` — list threads with `--stale` and `--expired-watch`
+  filters. Gives the agent (and the human) a way to review stale `open` threads and
+  expired `watch` notes without it being per-task friction.
 
 ### Unchanged
 
@@ -199,16 +264,40 @@ unchanged. Only the *guidance* on when to call `save` changes (see Save Rhythm).
 
 `packages/core/src/types.ts`:
 
-- `Thread` — add `lastTouchedCommit?: string` and a derived `stale` flag (computed
-  at read time, not stored).
+- `Thread` — add `kind: 'open' | 'watch'` (default `'open'`), `lastTouchedCommit?:
+  string`, and a derived `stale` flag (computed at read time, not stored). `watch`
+  threads also carry an expiry derived from `createdAt` / `lastTouchedCommit`.
 - New `TraceEntry` interface: `id`, `projectId`, `branchId`, `note`,
   `gitCommitSha?`, `createdAt`.
 - `SessionSnapshot` — `recentCommits` stays but is now sized by `commitWindow`; add
-  `staleThreadCount: number`; add `roadmap` as a structured field distinct from the
-  free-text `projectSummary`.
+  `staleThreadCount` and `expiredWatchCount`; add `roadmap` as a structured field
+  distinct from the free-text `projectSummary`. Volatile git facts (branch, HEAD,
+  commit count) are populated live at load time, never persisted.
 
-`packages/store` — new `trace` table; `threads` table gains `last_touched_commit`.
-A migration is required; follow the existing migration pattern in the store package.
+`packages/store` — new `trace` table; `threads` table gains `kind` and
+`last_touched_commit` columns. A migration is required; follow the existing
+migration pattern in the store package.
+
+---
+
+## Implementation order
+
+Source 3 reprioritized this spec: the live install is hurting from list bloat
+*today*, while the trace tier is net-new value with no active pain. Build in this
+order:
+
+1. **Types + schema/migration** — `Thread.kind`, `lastTouchedCommit`, `TraceEntry`,
+   the `trace` table, the `threads` column additions. Foundational; touches no
+   behavior. (This is the "Steps 1–2" scope.)
+2. **Dedupe-on-save** — the uniqueness check in `project_memory_save`. Smallest
+   behavioral fix, stops the list growing immediately.
+3. **Decay + prune** — `stale` derivation, `watch` TTL expiry, the curated load
+   output, `project_memory_threads`. This is the headline fix.
+4. **Windowed retrieval** — `commitWindow` on `project_memory_load`,
+   `project_memory_retrieve`.
+5. **Trace tier** — `project_memory_trace` and the pull-only fine tier. Last: it is
+   new capability, not active-pain relief, and it is the most likely to reintroduce
+   noise if rushed.
 
 ---
 
@@ -262,19 +351,24 @@ since that is the only tier a contributor write needs gating for.
 ## Validation gate
 
 This spec is complete when, on a fresh Claude Code audit run against a connected
-install (prerequisite patch already shipped):
+install:
 
-1. `project_memory_load` returns a clean roadmap + a bounded commit window + only
-   non-stale threads + an honest stale count. No 50-thread dump.
-2. The session produces saves that the *next* session demonstrably reads (the `@`
-   include is wired — verified by the prerequisite patch).
-3. Asked the same question that started this — "is ContextGit helpful, honest
-   answer" — Claude Code's answer no longer contains "write-only theater" and no
-   longer says the saves duplicate git log.
-4. The trace tier is used at least once for a real dead end, and retrieving it does
+1. `project_memory_load` returns a Roadmap whose volatile facts (branch, commit
+   count, HEAD) are *correct* — generated live, not a stale stored blob. No
+   "3 commits on master" while 100 commits deep.
+2. The open-thread list in the load is curated: no duplicates, no expired `watch`
+   notes, only non-stale `open` threads, plus an honest count of what was filtered.
+   No ~90-entry dump.
+3. Saving the same thread subject twice does not create a duplicate (dedupe-on-save).
+4. A `watch` note expires on its TTL and silently drops from the load; an `open`
+   thread in the same position goes `stale` but is still retrievable.
+5. The session produces saves that the *next* session demonstrably reads.
+6. The trace tier is used at least once for a real dead end, and retrieving it does
    not appear in the default load.
+7. Asked the honest-answer question, Claude Code no longer reports stale top-level
+   summaries or a noisy, duplicate-ridden thread list.
 
-If 1–4 hold, the granularity restratification worked.
+If 1–7 hold, the granularity restratification worked.
 
 ---
 
