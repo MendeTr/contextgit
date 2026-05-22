@@ -19,7 +19,7 @@ import type {
   SessionSnapshot,
   Thread,
 } from '@contextgit/core'
-import { normalizeThreadSubject } from '@contextgit/core'
+import { classifyThread, normalizeThreadSubject } from '@contextgit/core'
 
 // ─── Row types (SQLite column names → snake_case) ───────────────────────────
 
@@ -249,6 +249,10 @@ export class Queries {
 
     selectCommitsSince: Statement<[string, number]>
     selectThreadChangesSince: Statement<[string, number, number]>
+
+    selectCommitCreatedAt: Statement<[string]>
+    countProjectCommitsSince: Statement<[string, number]>
+    countBranchCommitsSince: Statement<[string, number]>
   }
 
   constructor(db: Database) {
@@ -398,6 +402,18 @@ export class Queries {
       `),
       selectThreadChangesSince: db.prepare(`
         SELECT * FROM threads WHERE project_id = ? AND (created_at > ? OR updated_at > ?) ORDER BY created_at ASC
+      `),
+
+      selectCommitCreatedAt: db.prepare(`
+        SELECT created_at FROM commits WHERE id = ?
+      `),
+      countProjectCommitsSince: db.prepare(`
+        SELECT COUNT(*) AS n FROM commits c
+        JOIN branches b ON c.branch_id = b.id
+        WHERE b.project_id = ? AND c.created_at > ?
+      `),
+      countBranchCommitsSince: db.prepare(`
+        SELECT COUNT(*) AS n FROM commits WHERE branch_id = ? AND created_at > ?
       `),
     }
   }
@@ -622,12 +638,39 @@ export class Queries {
 
   listOpenThreads(projectId: string): Thread[] {
     const rows = this.stmts.selectOpenThreads.all(projectId) as ThreadRow[]
-    return rows.map(toThread)
+    const now = Date.now()
+    return rows.map(toThread).map((t) => this.attachDecayFlags(t, now))
   }
 
   listOpenThreadsByBranch(branchId: string): Thread[] {
     const rows = this.stmts.selectOpenThreadsByBranch.all(branchId) as ThreadRow[]
-    return rows.map(toThread)
+    const now = Date.now()
+    return rows.map(toThread).map((t) => this.attachDecayFlags(t, now))
+  }
+
+  /**
+   * Set the derived `stale` (open) or `expired` (watch) flag on a thread by
+   * looking up the touched commit's timestamp and counting project/branch
+   * commits since. Returns a new Thread — never mutates the input.
+   */
+  private attachDecayFlags(thread: Thread, now: number): Thread {
+    const touchCommitId = thread.lastTouchedCommit ?? thread.openedInCommit
+    const touchRow = this.stmts.selectCommitCreatedAt.get(touchCommitId) as { created_at: number } | undefined
+    const touchTs = touchRow?.created_at ?? thread.createdAt.getTime()
+
+    const projectRow = this.stmts.countProjectCommitsSince.get(thread.projectId, touchTs) as { n: number }
+    const branchRow = this.stmts.countBranchCommitsSince.get(thread.branchId, touchTs) as { n: number }
+
+    const flag = classifyThread(thread, {
+      touchTs,
+      projectCommitsSince: projectRow.n,
+      branchCommitsSince: branchRow.n,
+      now,
+    })
+
+    if (flag === 'stale') return { ...thread, stale: true }
+    if (flag === 'expired') return { ...thread, expired: true }
+    return thread
   }
 
   /** Move open threads from source branch to target (called during merge). */

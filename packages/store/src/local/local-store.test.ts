@@ -336,6 +336,101 @@ describe('LocalStore (in-memory)', () => {
     expect(byDesc['speculative reminder'].kind).toBe('watch')
   })
 
+  it('flags an open thread as stale once enough branch commits accrue past its touch', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.upsertAgent({
+      id: 'agent-1',
+      projectId: project.id,
+      role: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+    })
+
+    // Open the thread on commit #1
+    await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+      message: 'open',
+      content: 'c',
+      summary: 's',
+      commitType: 'manual',
+      threads: { open: ['the stale-soon thread'] },
+    })
+
+    const before = await store.listOpenThreads(project.id)
+    expect(before).toHaveLength(1)
+    expect(before[0].stale).toBeUndefined()
+
+    // Pile on enough subsequent commits to cross the 30-commit branch threshold
+    for (let i = 0; i < 31; i++) {
+      await store.createCommit({
+        branchId: branch.id,
+        agentId: 'agent-1',
+        agentRole: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+        message: `noise ${i}`,
+        content: 'c',
+        summary: 's',
+        commitType: 'manual',
+      })
+    }
+
+    const after = await store.listOpenThreads(project.id)
+    expect(after).toHaveLength(1)
+    expect(after[0].stale).toBe(true)
+    expect(after[0].expired).toBeUndefined()
+  })
+
+  it('flags a watch thread as expired once branch commits past its touch hit the watch threshold', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.upsertAgent({
+      id: 'agent-1',
+      projectId: project.id,
+      role: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+    })
+
+    await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+      message: 'open watch',
+      content: 'c',
+      summary: 's',
+      commitType: 'manual',
+      threads: { open: [{ subject: 'watch this', kind: 'watch' }] },
+    })
+
+    for (let i = 0; i < 16; i++) {
+      await store.createCommit({
+        branchId: branch.id,
+        agentId: 'agent-1',
+        agentRole: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+        message: `noise ${i}`,
+        content: 'c',
+        summary: 's',
+        commitType: 'manual',
+      })
+    }
+
+    const after = await store.listOpenThreads(project.id)
+    expect(after).toHaveLength(1)
+    expect(after[0].kind).toBe('watch')
+    expect(after[0].expired).toBe(true)
+    expect(after[0].stale).toBeUndefined()
+  })
+
   it('opens distinct threads when normalized subjects differ', async () => {
     const project = await store.createProject({ name: 'p' })
     const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
