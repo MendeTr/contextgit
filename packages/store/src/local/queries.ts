@@ -19,6 +19,7 @@ import type {
   SessionSnapshot,
   Thread,
 } from '@contextgit/core'
+import { normalizeThreadSubject } from '@contextgit/core'
 
 // ─── Row types (SQLite column names → snake_case) ───────────────────────────
 
@@ -229,6 +230,7 @@ export class Queries {
     insertThread: Statement
     syncThread: Statement
     closeThread: Statement<[string, string, string]>
+    updateThreadLastTouched: Statement<[string, string]>
     selectOpenThreads: Statement<[string]>
     selectOpenThreadsByBranch: Statement<[string]>
     reassignThreads: Statement<[string, string]>
@@ -322,6 +324,9 @@ export class Queries {
         UPDATE threads
         SET status = 'closed', closed_in_commit = ?, closed_note = ?
         WHERE id = ?
+      `),
+      updateThreadLastTouched: db.prepare(`
+        UPDATE threads SET last_touched_commit = ? WHERE id = ?
       `),
       selectOpenThreads: db.prepare(
         `SELECT * FROM threads WHERE project_id = ? AND status = 'open' ORDER BY created_at ASC`
@@ -596,6 +601,23 @@ export class Queries {
 
   closeThread(threadId: string, closedInCommit: string, note: string): void {
     this.stmts.closeThread.run(closedInCommit, note, threadId)
+  }
+
+  /**
+   * Find an open thread on this project whose normalized description matches.
+   * Used by dedupe-on-save (02 DELTA spec §A) — open-thread count per project is
+   * bounded by the decay system being built, so a JS-side scan is acceptable.
+   */
+  findOpenThreadByNormalizedDescription(projectId: string, normalized: string): Thread | undefined {
+    const rows = this.stmts.selectOpenThreads.all(projectId) as ThreadRow[]
+    for (const row of rows) {
+      if (normalizeThreadSubject(row.description) === normalized) return toThread(row)
+    }
+    return undefined
+  }
+
+  updateThreadLastTouched(threadId: string, commitId: string): void {
+    this.stmts.updateThreadLastTouched.run(commitId, threadId)
   }
 
   listOpenThreads(projectId: string): Thread[] {

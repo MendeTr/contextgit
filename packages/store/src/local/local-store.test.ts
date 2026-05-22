@@ -250,4 +250,82 @@ describe('LocalStore (in-memory)', () => {
     await expect(store2.createProject({ id: 'p1', name: 'Test' })).resolves.toMatchObject({ id: 'p1' })
     store2.close()
   })
+
+  it('dedupes thread opens on normalized subject and updates lastTouchedCommit', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.upsertAgent({
+      id: 'agent-1',
+      projectId: project.id,
+      role: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+    })
+
+    const first = await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+      message: 'open thread',
+      content: 'c',
+      summary: 's',
+      commitType: 'manual',
+      threads: { open: ['Write Plan B Extension'] },
+    })
+
+    const afterFirst = await store.listOpenThreads(project.id)
+    expect(afterFirst).toHaveLength(1)
+    expect(afterFirst[0].description).toBe('Write Plan B Extension')
+    expect(afterFirst[0].lastTouchedCommit).toBe(first.id)
+
+    const second = await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+      message: 'duplicate subject, varied casing + spacing',
+      content: 'c',
+      summary: 's',
+      commitType: 'manual',
+      threads: { open: ['  write  PLAN b   extension  '] },
+    })
+
+    const afterSecond = await store.listOpenThreads(project.id)
+    expect(afterSecond).toHaveLength(1)
+    expect(afterSecond[0].id).toBe(afterFirst[0].id)
+    expect(afterSecond[0].description).toBe('Write Plan B Extension')
+    expect(afterSecond[0].lastTouchedCommit).toBe(second.id)
+  })
+
+  it('opens distinct threads when normalized subjects differ', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.upsertAgent({
+      id: 'agent-1',
+      projectId: project.id,
+      role: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+    })
+
+    await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+      message: 'open two threads',
+      content: 'c',
+      summary: 's',
+      commitType: 'manual',
+      threads: { open: ['Subject A', 'Subject B'] },
+    })
+
+    const threads = await store.listOpenThreads(project.id)
+    expect(threads).toHaveLength(2)
+    expect(threads.map((t) => t.description).sort()).toEqual(['Subject A', 'Subject B'])
+  })
 })
