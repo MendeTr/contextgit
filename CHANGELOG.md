@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.2.0 — 2026-05-22
+
+A focused release implementing the three-tier memory model (DELTA spec `02`). Two independent audits — Claude Code usage and the GCC paper (Wu et al., arXiv:2508.00031v2) — pointed at the same defect: ContextGit stored too much of what git already knows and too little of what it doesn't. 0.2.0 fixes that.
+
+### What changed for the user
+
+**Open threads no longer accumulate.** Two failure modes are now structurally impossible: literal duplicates from re-saving the same subject (dedupe-on-save) and the unbounded list of months-old "watch for X" notes (TTL-expiring watch threads + commit-distance decay).
+
+**The default load is curated, not exhaustive.** `project_memory_load` now returns only live open threads + a single honest count line:
+
+```
+(+12 stale, +7 expired-watch — call project_memory_threads to view)
+```
+
+Everything filtered out stays one tool call away via the new `project_memory_threads` tool.
+
+**Volatile git facts are read live, never cached.** Branch, HEAD sha, and commit count are populated from `git` on every `project_memory_load`. Stale "3 commits on master" snapshots while on a feature branch 100 commits deep are impossible. The snapshot grows a `## Git` section:
+
+```
+## Git
+Branch: feature/payments | HEAD: a1b2c3d4 | 47 commits
+```
+
+**A new fine tier for step-level reasoning.** The trace tier holds decisions considered and rejected, dead ends, "tried X, abandoned because Y" — the things that exist in no other system. It's pull-only. It is NEVER included in the default load. Two new tools:
+
+- `project_memory_trace` — append a step-level note
+- `project_memory_retrieve` (tier=`commits` | `trace`) — windowed scroll-back through either tier
+
+**Open threads can be marked as `watch`.** Same call shape, additive:
+
+```ts
+threads.open = [
+  'committed open thread',                              // → kind: 'open' (default)
+  { subject: 'speculative reminder', kind: 'watch' },   // → TTL-expiring
+]
+```
+
+Plain string still works — coerced to `{subject, kind:'open'}`. Watch notes drop silently from the load after their TTL (3 days or 15 branch commits, whichever first). Open threads decay to `stale` after a longer threshold (8 project commits or 30 branch commits) but stay retrievable.
+
+### New MCP tools
+
+| Tool | What it does |
+|------|--------------|
+| `project_memory_threads` | List threads with `filter='stale' \| 'expired-watch' \| 'live' \| 'all'`. Review what the default load filtered out. |
+| `project_memory_retrieve` | Windowed scroll-back. `tier='commits' \| 'trace'`, `window` (default 10), `offset` (default 0). |
+| `project_memory_trace` | Append a step-level reasoning note to the fine tier. Required `note`, optional `git_commit_sha`. |
+
+### Changed MCP tools
+
+- `project_memory_load` accepts a new optional `commit_window` (default 5; replaces the previous hardcoded 3).
+
+### Migrations
+
+Two automatic SQLite migrations apply on first use (`v6`, `v7`). No manual step required.
+
+- `v6` — `threads.kind` (default `'open'`) + `threads.last_touched_commit`
+- `v7` — new `trace` table with indexes for windowed retrieval
+
+### Known scope
+
+- LocalStore (the default SQLite backend) implements everything.
+- Supabase and remote backends keep building but don't yet have dedupe-on-save, decay flags, or trace methods. These ship when team/remote use re-enters scope.
+
+---
+
 ## 0.1.10 — 2026-05-22
 
 ### Bug fixes
