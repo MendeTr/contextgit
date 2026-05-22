@@ -7,7 +7,7 @@
 // Write-side (opening / closing threads) happens via CommitInput.threads
 // inside store.createCommit(), which is the right transactional boundary.
 
-import type { Thread } from './types.js'
+import type { Thread, ThreadKind, ThreadOpenInput } from './types.js'
 
 /**
  * Canonical form of a thread subject for dedupe-on-save (02 DELTA, spec §A).
@@ -16,6 +16,16 @@ import type { Thread } from './types.js'
  */
 export function normalizeThreadSubject(subject: string): string {
   return subject.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/**
+ * Coerce a `ThreadOpenInput` (string sugar OR object) into `{ subject, kind }`.
+ * Plain string → `{ subject, kind: 'open' }`. Object missing `kind` → `'open'`.
+ * Keeps the public API additive: old `string[]` callers keep working unchanged.
+ */
+export function parseThreadOpenInput(input: ThreadOpenInput): { subject: string; kind: ThreadKind } {
+  if (typeof input === 'string') return { subject: input, kind: 'open' }
+  return { subject: input.subject, kind: input.kind ?? 'open' }
 }
 
 export interface ThreadReader {

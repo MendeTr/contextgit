@@ -184,10 +184,17 @@ export interface CommitInput {
   commitType: CommitType
   gitCommitSha?: string
   threads?: {
-    open?: string[]
+    open?: ThreadOpenInput[]
     close?: Array<{ id: string; note: string }>
   }
 }
+
+/**
+ * Accepted shape for `CommitInput.threads.open`. Plain string is sugar for
+ * `{ subject, kind: 'open' }` — additive, not breaking. Set `kind: 'watch'`
+ * to open a TTL-expiring reminder instead of a committed open thread.
+ */
+export type ThreadOpenInput = string | { subject: string; kind?: ThreadKind }
 
 export interface AgentInput {
   id: string

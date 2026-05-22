@@ -33,7 +33,7 @@ import type {
   SnapshotFormat,
   Thread,
 } from '@contextgit/core'
-import { SnapshotFormatter, normalizeThreadSubject } from '@contextgit/core'
+import { SnapshotFormatter, normalizeThreadSubject, parseThreadOpenInput } from '@contextgit/core'
 import type { ContextStore } from '../interface.js'
 import { runMigrations } from './migrations.js'
 import { Queries } from './queries.js'
@@ -226,10 +226,12 @@ export class LocalStore implements ContextStore {
         // Handle thread operations.
         // Dedupe-on-save (02 DELTA spec §A): if an open thread on this project
         // already has the same normalized subject, update its last_touched_commit
-        // instead of inserting a duplicate.
+        // instead of inserting a duplicate. Kind on a duplicate-save is ignored —
+        // an established 'open' thread is never silently downgraded to 'watch'.
         if (input.threads?.open?.length) {
-          for (const description of input.threads.open) {
-            const normalized = normalizeThreadSubject(description)
+          for (const entry of input.threads.open) {
+            const { subject, kind } = parseThreadOpenInput(entry)
+            const normalized = normalizeThreadSubject(subject)
             const existing = this.q.findOpenThreadByNormalizedDescription(branch.projectId, normalized)
             if (existing) {
               this.q.updateThreadLastTouched(existing.id, commitId)
@@ -237,11 +239,12 @@ export class LocalStore implements ContextStore {
             }
             this.q.insertThread(
               nanoid(),
-              description,
+              subject,
               branch.projectId,
               input.branchId,
               commitId,
               input.workflowType ?? null,
+              kind,
             )
           }
         }

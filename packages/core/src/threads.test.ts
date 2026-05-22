@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeThreadSubject } from './threads.js'
+import { normalizeThreadSubject, parseThreadOpenInput } from './threads.js'
 
 describe('normalizeThreadSubject', () => {
   it('trims surrounding whitespace', () => {
@@ -24,5 +24,19 @@ describe('normalizeThreadSubject', () => {
 
   it('treats distinct subjects as distinct', () => {
     expect(normalizeThreadSubject('foo')).not.toBe(normalizeThreadSubject('bar'))
+  })
+})
+
+describe('parseThreadOpenInput', () => {
+  it('coerces a plain string to {subject, kind: "open"}', () => {
+    expect(parseThreadOpenInput('hello')).toEqual({ subject: 'hello', kind: 'open' })
+  })
+
+  it('passes through an object with kind set', () => {
+    expect(parseThreadOpenInput({ subject: 'note', kind: 'watch' })).toEqual({ subject: 'note', kind: 'watch' })
+  })
+
+  it('defaults kind to "open" when an object omits it', () => {
+    expect(parseThreadOpenInput({ subject: 'note' })).toEqual({ subject: 'note', kind: 'open' })
   })
 })

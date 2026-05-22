@@ -300,6 +300,42 @@ describe('LocalStore (in-memory)', () => {
     expect(afterSecond[0].lastTouchedCommit).toBe(second.id)
   })
 
+  it('opens a thread as kind="watch" when input is {subject, kind: "watch"}', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.upsertAgent({
+      id: 'agent-1',
+      projectId: project.id,
+      role: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+    })
+
+    await store.createCommit({
+      branchId: branch.id,
+      agentId: 'agent-1',
+      agentRole: 'dev',
+      tool: 'claude-code',
+      workflowType: 'interactive',
+      message: 'open one open and one watch',
+      content: 'c',
+      summary: 's',
+      commitType: 'manual',
+      threads: {
+        open: [
+          'committed thread',
+          { subject: 'speculative reminder', kind: 'watch' },
+        ],
+      },
+    })
+
+    const threads = await store.listOpenThreads(project.id)
+    expect(threads).toHaveLength(2)
+    const byDesc = Object.fromEntries(threads.map((t) => [t.description, t]))
+    expect(byDesc['committed thread'].kind).toBe('open')
+    expect(byDesc['speculative reminder'].kind).toBe('watch')
+  })
+
   it('opens distinct threads when normalized subjects differ', async () => {
     const project = await store.createProject({ name: 'p' })
     const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
