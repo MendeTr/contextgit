@@ -10,6 +10,8 @@ import {
   patchClaudeSettings,
   CLAUDE_MD_SENTINEL_START,
   CLAUDE_MD_SENTINEL_END,
+  CLAUDE_MD_FRAGMENT,
+  CONTEXT_COMMIT_SKILL,
 } from './init-helpers.js'
 
 let tmpDir: string
@@ -138,20 +140,17 @@ describe('registerMcp', () => {
 // ── patchClaudeSettings ───────────────────────────────────────────────────────
 
 describe('patchClaudeSettings', () => {
-  it('creates .claude/settings.json with both hooks when file does not exist', () => {
+  it('creates .claude/settings.json with SessionStart hook and no PostToolUse hook', () => {
     const result = patchClaudeSettings(tmpDir)
     expect(result.status).toBe('patched')
     const settingsPath = join(tmpDir, '.claude', 'settings.json')
     expect(existsSync(settingsPath)).toBe(true)
     const json = JSON.parse(readFileSync(settingsPath, 'utf-8'))
-    // SessionStart (not UserPromptSubmit)
+    // SessionStart hook present
     expect(json.hooks.SessionStart).toHaveLength(1)
     expect(json.hooks.SessionStart[0].hooks[0].command).toContain('project_memory_load')
-    // PostToolUse with native if condition
-    expect(json.hooks.PostToolUse).toHaveLength(1)
-    expect(json.hooks.PostToolUse[0].matcher).toBe('Bash')
-    expect(json.hooks.PostToolUse[0].if).toBe('Bash(git commit*)')
-    expect(json.hooks.PostToolUse[0].hooks[0].command).toContain('project_memory_save')
+    // No PostToolUse hook — git commits no longer trigger mandatory saves
+    expect(json.hooks.PostToolUse).toBeUndefined()
     // No UserPromptSubmit
     expect(json.hooks.UserPromptSubmit).toBeUndefined()
   })
@@ -164,7 +163,7 @@ describe('patchClaudeSettings', () => {
     const json = JSON.parse(readFileSync(settingsPath, 'utf-8'))
     expect(json.permissions.allow).toContain('Bash(git:*)')
     expect(json.hooks.SessionStart).toBeDefined()
-    expect(json.hooks.PostToolUse).toBeDefined()
+    expect(json.hooks.PostToolUse).toBeUndefined()
   })
 
   it('is idempotent — returns already-present on second call', () => {
@@ -174,6 +173,18 @@ describe('patchClaudeSettings', () => {
     const json = JSON.parse(readFileSync(join(tmpDir, '.claude', 'settings.json'), 'utf-8'))
     // hooks not duplicated
     expect(json.hooks.SessionStart).toHaveLength(1)
+  })
+})
+
+// ── save-rhythm content checks ────────────────────────────────────────────────
+
+describe('save-rhythm content', () => {
+  it('CLAUDE_MD_FRAGMENT does not contain "Every git commit"', () => {
+    expect(CLAUDE_MD_FRAGMENT).not.toContain('Every git commit')
+  })
+
+  it('CONTEXT_COMMIT_SKILL description does not contain "Do not batch"', () => {
+    expect(CONTEXT_COMMIT_SKILL).not.toContain('Do not batch')
   })
 })
 
