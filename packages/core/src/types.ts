@@ -112,6 +112,15 @@ export interface Thread {
   stale?: boolean            // derived at read time — not stored
 }
 
+export interface TraceEntry {
+  id: string
+  projectId: string
+  branchId: string
+  note: string
+  gitCommitSha?: string
+  createdAt: Date
+}
+
 export interface Agent {
   id: string
   projectId: string
