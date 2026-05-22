@@ -707,6 +707,90 @@ Call after a context branch experiment succeeds and you want to preserve the fin
       ),
   }
 
+  // ── project_memory_retrieve — windowed scroll-back (02 DELTA Step 4) ──────
+
+  const handleProjectMemoryRetrieve = async ({
+    tier,
+    window,
+    offset,
+  }: {
+    tier: 'commits' | 'trace'
+    window?: number
+    offset?: number
+  }) => {
+    const limit = window ?? 10
+    const off = offset ?? 0
+    try {
+      if (tier === 'commits') {
+        const commits = await ctx.store.listCommits(ctx.branchId, { limit, offset: off })
+        if (commits.length === 0) {
+          return { content: [{ type: 'text' as const, text: `No commits at offset ${off}.` }] }
+        }
+        const lines = commits.map(
+          (c) =>
+            `- [${c.createdAt.toISOString()}] ${c.gitCommitSha ? c.gitCommitSha.slice(0, 8) + ' ' : ''}"${c.message}" by ${c.agentRole} via ${c.tool}`,
+        )
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `${commits.length} commit(s) at offset ${off} (window ${limit}):\n${lines.join('\n')}`,
+            },
+          ],
+        }
+      }
+
+      // tier === 'trace'
+      if (!ctx.store.listTraceEntries) {
+        return {
+          content: [{ type: 'text' as const, text: `Trace tier is not supported by the current store backend.` }],
+          isError: true,
+        }
+      }
+      const entries = await ctx.store.listTraceEntries(ctx.projectId, { limit, offset: off })
+      if (entries.length === 0) {
+        return { content: [{ type: 'text' as const, text: `No trace entries at offset ${off}.` }] }
+      }
+      const lines = entries.map(
+        (e) =>
+          `- [${e.createdAt.toISOString()}] ${e.gitCommitSha ? e.gitCommitSha.slice(0, 8) + ' ' : ''}${e.note}`,
+      )
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `${entries.length} trace entry/ies at offset ${off} (window ${limit}):\n${lines.join('\n')}`,
+          },
+        ],
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return {
+        content: [{ type: 'text' as const, text: `Error retrieving ${tier}: ${message}` }],
+        isError: true,
+      }
+    }
+  }
+
+  const projectMemoryRetrieveSchema = {
+    tier: z
+      .enum(['commits', 'trace'])
+      .describe(
+        "'commits' scrolls back through branch commits beyond project_memory_load's window. 'trace' returns fine-tier step-level notes — NEVER auto-loaded; pull-only.",
+      ),
+    window: z.number().int().positive().default(10).describe('Page size. Default 10.'),
+    offset: z.number().int().nonnegative().default(0).describe('Skip this many entries. Default 0 (most recent).'),
+  }
+
+  server.tool(
+    'project_memory_retrieve',
+    `Windowed scroll-back for commits and trace entries. Use when project_memory_load's recent-commits window isn't enough, or to read the trace tier (which is never included in the default load).
+
+The trace tier holds step-level reasoning notes — dead ends, "tried X, abandoned because Y". Retrieving it explicitly is the whole point: it's cold storage with an index, never noise in the default context.`,
+    projectMemoryRetrieveSchema,
+    handleProjectMemoryRetrieve,
+  )
+
   server.tool(
     'project_memory_threads',
     `Review open threads with their decay status. Use to inspect the stale and expired-watch threads that the default project_memory_load filters out.
