@@ -16,6 +16,7 @@ import type {
   SessionSnapshot,
   SnapshotFormat,
   Thread,
+  TraceEntry,
 } from '@contextgit/core'
 
 export interface ContextStore {
@@ -44,6 +45,11 @@ export interface ContextStore {
   listOpenThreads(projectId: string): Promise<Thread[]>
   listOpenThreadsByBranch(branchId: string): Promise<Thread[]>
   syncThread(thread: Thread): Promise<Thread>
+
+  // Trace tier (02 DELTA Step 5) — append-only, pull-only, NEVER auto-loaded.
+  // Optional on the interface: legacy stores may not implement these yet.
+  appendTraceEntry?(input: { projectId: string; branchId: string; note: string; gitCommitSha?: string }): Promise<TraceEntry>
+  listTraceEntries?(projectId: string, pagination: Pagination): Promise<TraceEntry[]>
 
   // Search
   // vector is a 384-dim Float32Array produced by EmbeddingService in core.

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { LocalStore } from './index.js'
+import { SnapshotFormatter } from '@contextgit/core'
 
 /** Advance the mocked clock by 1 minute. Use between commits in decay tests so each gets a distinct created_at. */
 function tick(): void {
@@ -246,6 +247,58 @@ describe('LocalStore (in-memory)', () => {
     const mainThreads = await store.listOpenThreadsByBranch(main.id)
     expect(mainThreads).toHaveLength(1)
     expect(mainThreads[0].description).toBe('Thread from feat')
+  })
+
+  it('appends and lists trace entries in reverse-chronological order with paging', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+
+    const first = await store.appendTraceEntry({
+      projectId: project.id,
+      branchId: branch.id,
+      note: 'tried X, abandoned because Y',
+    })
+    const second = await store.appendTraceEntry({
+      projectId: project.id,
+      branchId: branch.id,
+      note: 'considered Z, picked W',
+      gitCommitSha: 'abc1234',
+    })
+
+    expect(first.id).toBeTruthy()
+    expect(first.id).not.toBe(second.id)
+
+    const page = await store.listTraceEntries(project.id, { limit: 10, offset: 0 })
+    expect(page).toHaveLength(2)
+    // Most-recent-first
+    expect(page[0].note).toBe('considered Z, picked W')
+    expect(page[0].gitCommitSha).toBe('abc1234')
+    expect(page[1].note).toBe('tried X, abandoned because Y')
+
+    const offset1 = await store.listTraceEntries(project.id, { limit: 10, offset: 1 })
+    expect(offset1).toHaveLength(1)
+    expect(offset1[0].note).toBe('tried X, abandoned because Y')
+
+    const empty = await store.listTraceEntries(project.id, { limit: 10, offset: 5 })
+    expect(empty).toHaveLength(0)
+  })
+
+  it('does not include trace entries in getSessionSnapshot', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+
+    await store.appendTraceEntry({
+      projectId: project.id,
+      branchId: branch.id,
+      note: 'this must NEVER auto-load',
+    })
+
+    const snapshot = await store.getSessionSnapshot(project.id, branch.id)
+    const formatter = new SnapshotFormatter()
+    const out = formatter.format(snapshot, 'agents-md')
+
+    expect(out).not.toContain('this must NEVER auto-load')
+    expect(out).not.toContain('trace')
   })
 
   it('uses explicit dbPath when provided, ignoring projectId for path computation', async () => {

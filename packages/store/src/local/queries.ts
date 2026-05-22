@@ -18,6 +18,7 @@ import type {
   SearchResult,
   SessionSnapshot,
   Thread,
+  TraceEntry,
 } from '@contextgit/core'
 import { classifyThread, normalizeThreadSubject } from '@contextgit/core'
 
@@ -78,6 +79,15 @@ interface ThreadRow {
   closed_note: string | null
   created_at: number
   updated_at: number | null
+}
+
+interface TraceRow {
+  id: string
+  project_id: string
+  branch_id: string
+  note: string
+  git_commit_sha: string | null
+  created_at: number
 }
 
 interface AgentRow {
@@ -189,6 +199,17 @@ function toClaim(row: ClaimRow): Claim {
   }
 }
 
+function toTraceEntry(row: TraceRow): TraceEntry {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    branchId: row.branch_id,
+    note: row.note,
+    gitCommitSha: row.git_commit_sha ?? undefined,
+    createdAt: new Date(row.created_at),
+  }
+}
+
 function toAgent(row: AgentRow): Agent {
   return {
     id: row.id,
@@ -253,6 +274,9 @@ export class Queries {
     selectCommitCreatedAt: Statement<[string]>
     countProjectCommitsSince: Statement<[string, number]>
     countBranchCommitsSince: Statement<[string, number]>
+
+    insertTraceEntry: Statement
+    selectTraceEntries: Statement<[string, number, number]>
   }
 
   constructor(db: Database) {
@@ -414,6 +438,16 @@ export class Queries {
       `),
       countBranchCommitsSince: db.prepare(`
         SELECT COUNT(*) AS n FROM commits WHERE branch_id = ? AND created_at > ?
+      `),
+
+      insertTraceEntry: db.prepare(`
+        INSERT INTO trace (id, project_id, branch_id, note, git_commit_sha, created_at)
+        VALUES (@id, @project_id, @branch_id, @note, @git_commit_sha, @created_at)
+      `),
+      selectTraceEntries: db.prepare(`
+        SELECT * FROM trace WHERE project_id = ?
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT ? OFFSET ?
       `),
     }
   }
@@ -676,6 +710,42 @@ export class Queries {
   /** Move open threads from source branch to target (called during merge). */
   reassignOpenThreads(fromBranchId: string, toBranchId: string): void {
     this.stmts.reassignThreads.run(toBranchId, fromBranchId)
+  }
+
+  // ─── Trace (fine tier, 02 DELTA) ─────────────────────────────────────────
+  //
+  // Append-only, pull-only. NEVER included in getSessionSnapshot / default load.
+  // Retrieved via project_memory_retrieve(tier: 'trace', window, offset).
+
+  insertTraceEntry(input: {
+    id: string
+    projectId: string
+    branchId: string
+    note: string
+    gitCommitSha?: string
+  }): TraceEntry {
+    const now = Date.now()
+    this.stmts.insertTraceEntry.run({
+      id: input.id,
+      project_id: input.projectId,
+      branch_id: input.branchId,
+      note: input.note,
+      git_commit_sha: input.gitCommitSha ?? null,
+      created_at: now,
+    })
+    return {
+      id: input.id,
+      projectId: input.projectId,
+      branchId: input.branchId,
+      note: input.note,
+      gitCommitSha: input.gitCommitSha,
+      createdAt: new Date(now),
+    }
+  }
+
+  listTraceEntries(projectId: string, pagination: Pagination): TraceEntry[] {
+    const rows = this.stmts.selectTraceEntries.all(projectId, pagination.limit, pagination.offset) as TraceRow[]
+    return rows.map(toTraceEntry)
   }
 
   // ─── Agents ───────────────────────────────────────────────────────────────

@@ -32,6 +32,7 @@ import type {
   SessionSnapshot,
   SnapshotFormat,
   Thread,
+  TraceEntry,
 } from '@contextgit/core'
 import { SnapshotFormatter, normalizeThreadSubject, parseThreadOpenInput } from '@contextgit/core'
 import type { ContextStore } from '../interface.js'
@@ -329,6 +330,24 @@ export class LocalStore implements ContextStore {
   syncThread(thread: Thread): Promise<Thread> {
     try {
       return Promise.resolve(this.q.syncThread(thread))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  // ─── Trace (fine tier — 02 DELTA Step 4/5) ───────────────────────────────
+
+  appendTraceEntry(input: { projectId: string; branchId: string; note: string; gitCommitSha?: string }): Promise<TraceEntry> {
+    try {
+      return Promise.resolve(this.q.insertTraceEntry({ id: nanoid(), ...input }))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  listTraceEntries(projectId: string, pagination: Pagination): Promise<TraceEntry[]> {
+    try {
+      return Promise.resolve(this.q.listTraceEntries(projectId, pagination))
     } catch (e) {
       return Promise.reject(e)
     }
