@@ -93,18 +93,23 @@ export interface Commit {
   createdAt: Date
 }
 
+export type ThreadKind = 'open' | 'watch'
+
 export interface Thread {
   id: string
   projectId: string
   branchId: string
   description: string        // max 200 chars
   status: 'open' | 'closed'
+  kind?: ThreadKind          // 'open' = commitment (default), 'watch' = TTL-expiring reminder
   workflowType?: WorkflowType
   openedInCommit: string
+  lastTouchedCommit?: string // updated when thread is referenced or re-saved; drives commit-distance decay
   closedInCommit?: string
   closedNote?: string
   createdAt: Date
   updatedAt?: Date
+  stale?: boolean            // derived at read time — not stored
 }
 
 export interface Agent {
