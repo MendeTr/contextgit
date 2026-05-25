@@ -226,7 +226,7 @@ export interface Roadmap {
 }
 
 export interface SessionSnapshot {
-  projectSummary: string       // max 2000 tokens (legacy; prefer Roadmap going forward)
+  projectSummary: string       // legacy field, populated for back-compat but NOT rendered by SnapshotFormatter — see 02 DELTA gate 1. Use Roadmap (below) instead.
   branchName: string           // populated live from git at load time
   branchSummary: string        // max 500 tokens
   recentCommits: Commit[]      // sized by commitWindow on project_memory_load (default 5)

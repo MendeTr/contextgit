@@ -152,22 +152,42 @@ describe('SnapshotFormatter inline claim status', () => {
     expect(out).not.toContain('## Current Branch')
   })
 
-  it('agents-md contains ## Project State before ## Open Threads', () => {
+  // 02 DELTA gate 1: the legacy stored-prose summary is no longer emitted.
+  // projectSummary is reconstructable from the head commit summary and was going
+  // stale at load time; per the spec ("Architecture prose is dropped, not
+  // maintained"), the load now carries only the live ## Git facts + curated
+  // threads + recent activity, never a stored prose block.
+  it('agents-md does not emit the legacy ## Project State block', () => {
+    const snapshot = makeSnapshot({ projectSummary: 'free-form prose blob' })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).not.toContain('## Project State')
+    expect(out).not.toContain('free-form prose blob')
+    expect(out).not.toContain('(no summary yet)')
+  })
+
+  it('text format does not emit the legacy === PROJECT STATE === block', () => {
+    const snapshot = makeSnapshot({ projectSummary: 'free-form prose blob' })
+    const out = formatter.format(snapshot, 'text')
+    expect(out).not.toContain('=== PROJECT STATE ===')
+    expect(out).not.toContain('free-form prose blob')
+    expect(out).not.toContain('(no summary yet)')
+  })
+
+  // Defensive: when the head commit's summary itself contains markdown headings,
+  // the previous formatter would dump them under ## Project State and produce
+  // duplicate sections (notably a second ## Git). Verify exactly one ## Git
+  // heading regardless of what projectSummary carries.
+  it('agents-md emits exactly one ## Git heading even when projectSummary contains "## Git"', () => {
     const snapshot = makeSnapshot({
-      openThreads: [
-        {
-          id: 't1',
-          projectId: 'p',
-          branchId: 'b',
-          description: 'thread one',
-          status: 'open',
-          openedInCommit: 'c1',
-          createdAt: new Date(),
-        },
-      ],
+      projectSummary: '## Git\nBranch: stale-from-storage | HEAD: deadbeef',
+      headSha: '1234567890abcdef',
+      commitCount: 42,
     })
     const out = formatter.format(snapshot, 'agents-md')
-    expect(out.indexOf('## Project State')).toBeLessThan(out.indexOf('## Open Threads'))
+    const gitHeadingCount = (out.match(/^## Git$/gm) ?? []).length
+    expect(gitHeadingCount).toBe(1)
+    expect(out).not.toContain('stale-from-storage')
+    expect(out).not.toContain('deadbeef')
   })
 
   it('agents-md deduplicates open threads by id', () => {

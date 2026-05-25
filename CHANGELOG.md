@@ -23,6 +23,8 @@ Everything filtered out stays one tool call away via the new `project_memory_thr
 Branch: feature/payments | HEAD: a1b2c3d4 | 47 commits
 ```
 
+**The legacy `## Project State` block is removed.** The previous formatter wrapped the head commit's free-form `summary` prose under a `## Project State` heading at the top of every `project_memory_load`. That prose itself often contained its own markdown headings (`## Git`, `## Next concrete tasks`, …), producing duplicate sections and a stale top-level summary alongside the new live `## Git`. The curated load now emits only the live `## Git` facts + non-stale open threads + recent activity + active claims. The `projectSummary` field stays in `SessionSnapshot` for back-compat but is no longer rendered.
+
 **A new fine tier for step-level reasoning.** The trace tier holds decisions considered and rejected, dead ends, "tried X, abandoned because Y" — the things that exist in no other system. It's pull-only. It is NEVER included in the default load. Two new tools:
 
 - `project_memory_trace` — append a step-level note

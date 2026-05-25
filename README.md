@@ -28,9 +28,6 @@ Session 2: Agent loads snapshot → knows auth is done → starts on the next ta
 When an agent calls `project_memory_load`, it gets a snapshot like this:
 
 ```
-## Project State
-Auth module complete. API routes tested. Database schema finalized.
-
 ## Git
 Branch: feature/payments | HEAD: a1b2c3d4 | 47 commits
 

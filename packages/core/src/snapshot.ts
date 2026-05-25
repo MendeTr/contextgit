@@ -38,7 +38,11 @@ function gitFactsLine(branchName: string, headSha?: string, commitCount?: number
 
 export class SnapshotFormatter {
   format(snapshot: SessionSnapshot, fmt: SnapshotFormat): string {
-    const { projectSummary, branchName, branchSummary, recentCommits, openThreads, activeClaims } = snapshot
+    // Note: snapshot.projectSummary is intentionally NOT rendered. Per
+    // 02_ContextGit_DELTA_granularity.md, the load returns only the curated
+    // roadmap (live ## Git + threads + recent activity) — the stored prose
+    // summary went stale at load time and is dropped, not maintained.
+    const { branchName, branchSummary, recentCommits, openThreads, activeClaims } = snapshot
 
     if (fmt === 'json') {
       return JSON.stringify(snapshot, null, 2)
@@ -71,9 +75,8 @@ export class SnapshotFormatter {
             .join('\n')
         : '(none)'
       const sections: string[] = []
-      sections.push(`## Project State`, projectSummary || '(no summary yet)')
-      if (factsLine) sections.push(``, `## Git`, factsLine)
-      sections.push(``, `## Open Threads`, threadsSection)
+      if (factsLine) sections.push(`## Git`, factsLine, ``)
+      sections.push(`## Open Threads`, threadsSection)
       sections.push(``, `## Recent Activity`, commits || '(no commits yet)')
       sections.push(``, `## Active Claims`, claimsSection)
       return sections.join('\n')
@@ -102,9 +105,8 @@ export class SnapshotFormatter {
           .join('\n')
       : '(none)'
     const textSections: string[] = []
-    textSections.push(`=== PROJECT STATE ===`, projectSummary || '(no summary yet)')
-    if (factsLine) textSections.push(``, `=== GIT ===`, factsLine)
-    textSections.push(``, `=== CURRENT BRANCH: ${branchName} ===`, branchSummary || '(no branch summary yet)')
+    if (factsLine) textSections.push(`=== GIT ===`, factsLine, ``)
+    textSections.push(`=== CURRENT BRANCH: ${branchName} ===`, branchSummary || '(no branch summary yet)')
     textSections.push(``, `=== RECENT COMMITS ===`, commits || '(none)')
     textSections.push(``, `=== OPEN THREADS ===`, threadsSectionText)
     textSections.push(``, `=== ACTIVE CLAIMS ===`, claimsSectionText)
