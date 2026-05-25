@@ -195,22 +195,46 @@ Handle is `thread.id.slice(0, 6)` — pure render-time derivation. No new `Sessi
 
 ---
 
-## Save-rhythm strings — the negative example
+## Save-rhythm strings — commit-binding model (corrects 02)
 
-Three strings in [packages/cli/src/lib/init-helpers.ts](../../../packages/cli/src/lib/init-helpers.ts) — `CLAUDE_MD_FRAGMENT`, `CONTEXT_COMMIT_SKILL`, and the `additionalContext` text in `CONTEXTGIT_HOOKS` — get a new section inserted directly after the existing "do not save merely because a git commit happened" paragraph:
+**This is a rewrite, not an insertion.** Per the upstream 03 spec amendment (commit `f9557e6`), 02's "save ~3x per session, only when state changes git can't capture" rule is **wrong** and must be **removed**. The save is bound to its commit; that binding is the value. Save **per commit**, body carries intent.
+
+Two strings in [packages/cli/src/lib/init-helpers.ts](../../../packages/cli/src/lib/init-helpers.ts) need rewriting — `CLAUDE_MD_FRAGMENT` and `CONTEXT_COMMIT_SKILL`. (The third string mentioned in the upstream spec, `CONTEXTGIT_HOOKS`, no longer contains save-rhythm prose — the PostToolUse hook was removed in 0.1.10 and only the SessionStart hook remains, which is unrelated.)
+
+In `CLAUDE_MD_FRAGMENT`:
+- **Delete** the `## When to save context` section (the 02-rhythm 3-saves-per-session text).
+- **Delete** the `## Session End (do this every time)` section.
+- **Insert** a single new `## When to save context` section with the commit-binding model.
+- Keep `## Session Start`, `## Before risky exploration`, `## Before starting a task (multi-agent)`, and `## When scope changes mid-session` (the latter integrates with the new model via the `replan:` prefix).
+
+Replacement section:
 
 ```markdown
-## What a save is for
+## When to save context
 
-A save records what git cannot reconstruct: a decision, a reason, an
-abandoned approach, an open question.
+Save once per commit. Every git commit deserves a paired \`project_memory_save\`.
+Skipping commits leaves their history blind — the diff survives, the *reason*
+does not. The save's body is what makes the commit binding worth pulling in
+three weeks.
 
-Bad save: "Implemented apiFetch wrapper" — this paraphrases the commit
-message; git already has it.
+What the save body carries:
+- The **decision** behind the change — why this approach, not the other.
+- Any **approach abandoned** along the way (use \`replan:\` prefix if scope shifted).
+- The **open question** the commit raises — what is still unresolved.
 
-Good save: "Chose X-User-Id header over cookie auth because the
-extension can't share Loqally's session cookie" — the decision, not the diff.
+The body is NOT a restatement of the diff. Git already has the diff.
+
+Bad save: "Implemented apiFetch wrapper" — paraphrases the commit; git has it.
+
+Good save: "apiFetch wrapper — chose X-User-Id header over cookie auth because
+the extension can't share the host session cookie. Open: needs 401 handling."
 ```
+
+In `CONTEXT_COMMIT_SKILL`:
+- **Rewrite the `description:` frontmatter field** — currently embodies 02's rule, needs to embody commit-binding. New text:
+  > `"Save project memory once per git commit. Every commit deserves a paired save; the body carries what git cannot reconstruct — the decision behind the change, any approach abandoned (use replan: prefix), the open question the commit raises. The body is never a paraphrase of the diff."`
+- **Delete** the `## When to save context` section.
+- **Insert** the same replacement section as in `CLAUDE_MD_FRAGMENT` above.
 
 **Existing installs are not touched.** The user's local `.claude/skills/context-commit/SKILL.md` and `CLAUDE.md` fragment update only on the next `contextgit init` re-run. The CHANGELOG notes that explicitly.
 
@@ -235,10 +259,13 @@ output now carries a short 6-char handle. Close by handle, close by subject,
 or pass `closesThreads: ['handle-or-subject', …]` on a save — the resolution
 is atomic with the rest of the save.
 
-**Save-rhythm guidance gets a negative example.** The CLAUDE.md fragment and
-context-commit skill now show what a good save looks like vs. one that just
-paraphrases the commit message. Re-run `contextgit init` to pick up the new
-strings.
+**Save-rhythm rule corrected to commit-binding model.** 0.1.10 dropped the
+"save every git commit" rule in favor of "save ~3x per session." A usage audit
+disproved that — the save is bound to its commit, and that binding is the value.
+The new rule, written into the `contextgit init` strings: save once per commit;
+the body carries the decision, any abandoned approach (via `replan:`), and the
+open question the commit raises — never a paraphrase of the diff. Re-run
+`contextgit init` to pick up the new strings.
 ```
 
 Migration list in the entry gains v8.

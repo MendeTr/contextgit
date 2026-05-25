@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Empty the thread graveyard via an archive table + sweep-on-save, make closing a thread a one-step action via 6-char handles + `closesThreads` on save, and add a Bad/Good save example to the save-rhythm strings — all folded into the un-published 0.2.0.
+**Goal:** Empty the thread graveyard via an archive table + sweep-on-save, make closing a thread a one-step action via 6-char handles + `closesThreads` on save, and **rewrite the save-rhythm strings to the commit-binding model** (correcting 02's "save 3x per session" rule) — all folded into the un-published 0.2.0.
 
-**Architecture:** New `thread_archive` SQLite table mirroring `threads` plus `archived_at` and `archived_reason` columns. Migration v8 creates the table and runs a one-time sweep that moves currently-stale rows. The same sweep logic runs at the tail end of every `project_memory_save` transaction so newly-stale threads never accumulate. The MCP `project_memory_save` tool gains a `closes_threads: string[]` parameter that resolves each entry handle-first (6-char prefix on `threads.id`), then by normalized subject, then by handle against `thread_archive` (no-op if already archived); the entire save fails atomically if any entry stays unresolved. The snapshot formatter prepends a 6-char handle to every thread line so the close path has a copy-pasteable identifier. The `project_memory_threads` MCP tool gains close-by-handle, close-by-subject, restore, and `filter='archived'`. The save-rhythm strings in `packages/cli/src/lib/init-helpers.ts` gain a "What a save is for" section with Bad/Good examples.
+**Architecture:** New `thread_archive` SQLite table mirroring `threads` plus `archived_at` and `archived_reason` columns. Migration v8 creates the table and runs a one-time sweep that moves currently-stale rows. The same sweep logic runs at the tail end of every `project_memory_save` transaction so newly-stale threads never accumulate. The MCP `project_memory_save` tool gains a `closes_threads: string[]` parameter that resolves each entry handle-first (6-char prefix on `threads.id`), then by normalized subject, then by handle against `thread_archive` (no-op if already archived); the entire save fails atomically if any entry stays unresolved. The snapshot formatter prepends a 6-char handle to every thread line so the close path has a copy-pasteable identifier. The `project_memory_threads` MCP tool gains close-by-handle, close-by-subject, restore, and `filter='archived'`. The save-rhythm strings in `packages/cli/src/lib/init-helpers.ts` (`CLAUDE_MD_FRAGMENT` + `CONTEXT_COMMIT_SKILL`) are **rewritten** to the commit-binding model: save per commit, body carries decision / abandoned approach / open question, never a diff paraphrase.
 
 **Tech Stack:** TypeScript, better-sqlite3 (sync, wrapped in `Promise.resolve()` at interface boundary), nanoid for IDs, Vitest with in-memory SQLite for tests, `@modelcontextprotocol/sdk` for the MCP server, zod for tool schemas.
 
@@ -1478,69 +1478,183 @@ git commit -m "feat(core): snapshot formatter surfaces 6-char [handle] per threa
 
 ---
 
-## Task 14: Save-rhythm strings gain Bad/Good example
+## Task 14: Save-rhythm strings — commit-binding rewrite (corrects 02)
 
 **Files:**
 - Modify: `packages/cli/src/lib/init-helpers.ts`
 - Test: `packages/cli/src/lib/init-helpers.test.ts`
+
+Per the upstream 03 spec amendment (commit `f9557e6`), 02's "save ~3x per session, only when state changes git can't capture" rule is **wrong** and must be **removed** — the save is bound to its commit; that binding is the value. This task **deletes** the 02-rhythm sections in both strings and **replaces** them with the commit-binding model.
 
 - [ ] **Step 1: Write the failing tests**
 
 In `packages/cli/src/lib/init-helpers.test.ts`, find the existing describe block for the strings, and append:
 
 ```ts
-  it('CLAUDE_MD_FRAGMENT contains the "What a save is for" section with Bad/Good examples', () => {
-    expect(CLAUDE_MD_FRAGMENT).toContain('What a save is for')
-    expect(CLAUDE_MD_FRAGMENT).toContain('Bad save:')
-    expect(CLAUDE_MD_FRAGMENT).toContain('Good save:')
-  })
+  describe('save-rhythm commit-binding model (03 DELTA Fix 3)', () => {
+    it('CLAUDE_MD_FRAGMENT states save-per-commit + body-carries-intent', () => {
+      expect(CLAUDE_MD_FRAGMENT).toContain('Save once per commit')
+      expect(CLAUDE_MD_FRAGMENT).toContain('Bad save:')
+      expect(CLAUDE_MD_FRAGMENT).toContain('Good save:')
+      expect(CLAUDE_MD_FRAGMENT).toContain('decision')
+      expect(CLAUDE_MD_FRAGMENT).toContain('open question')
+    })
 
-  it('CONTEXT_COMMIT_SKILL contains the "What a save is for" section with Bad/Good examples', () => {
-    expect(CONTEXT_COMMIT_SKILL).toContain('What a save is for')
-    expect(CONTEXT_COMMIT_SKILL).toContain('Bad save:')
-    expect(CONTEXT_COMMIT_SKILL).toContain('Good save:')
+    it('CLAUDE_MD_FRAGMENT no longer contains the 02-rhythm text', () => {
+      expect(CLAUDE_MD_FRAGMENT).not.toContain('3–5 genuinely open threads')
+      expect(CLAUDE_MD_FRAGMENT).not.toContain('only when project state changes in a way')
+      expect(CLAUDE_MD_FRAGMENT).not.toContain('Do not save merely because a git commit happened')
+    })
+
+    it('CONTEXT_COMMIT_SKILL states save-per-commit + body-carries-intent', () => {
+      expect(CONTEXT_COMMIT_SKILL).toContain('Save once per commit')
+      expect(CONTEXT_COMMIT_SKILL).toContain('Bad save:')
+      expect(CONTEXT_COMMIT_SKILL).toContain('Good save:')
+    })
+
+    it('CONTEXT_COMMIT_SKILL description embodies commit-binding (not the 02 rhythm)', () => {
+      expect(CONTEXT_COMMIT_SKILL).toMatch(/description:\s*"[^"]*once per git commit/)
+      expect(CONTEXT_COMMIT_SKILL).not.toContain('Do not save merely because a git commit happened')
+    })
+
+    it('CONTEXT_COMMIT_SKILL no longer contains the 02-rhythm text', () => {
+      expect(CONTEXT_COMMIT_SKILL).not.toContain('3–5 genuinely open threads')
+    })
   })
 ```
 
-(Confirm `CLAUDE_MD_FRAGMENT` and `CONTEXT_COMMIT_SKILL` are already imported at the top of the test file — they should be from existing tests; if not, add them to the import.)
+(Confirm `CLAUDE_MD_FRAGMENT` and `CONTEXT_COMMIT_SKILL` are imported at the top of the test file. If existing tests didn't import them, add to the import statement.)
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `pnpm vitest run packages/cli/src/lib/init-helpers.test.ts -t "What a save is for"`
-Expected: FAIL — section not yet in the strings.
+Run: `pnpm vitest run packages/cli/src/lib/init-helpers.test.ts -t "commit-binding"`
+Expected: FAIL — the new rhythm text isn't present, and the old 02-rhythm text is still there.
 
-- [ ] **Step 3: Insert the section into both strings**
+- [ ] **Step 3: Rewrite `CLAUDE_MD_FRAGMENT`**
 
-In `packages/cli/src/lib/init-helpers.ts`, in `CLAUDE_MD_FRAGMENT`, immediately after the "A context save that only paraphrases a commit message is noise." line (around line 35), insert:
+In `packages/cli/src/lib/init-helpers.ts`, locate the `CLAUDE_MD_FRAGMENT` constant (lines 12-61). Replace the **entire constant** with this version. The substantive changes are: the `## When to save context` and `## Session End (do this every time)` sections are removed and a single new `## When to save context` section carrying the commit-binding model is added in their place. All other sections (`## Session Start`, `## Before risky exploration`, `## Before starting a task`, `## When scope changes mid-session`) stay.
 
+```ts
+export const CLAUDE_MD_FRAGMENT = `
+<!-- contextgit:start -->
+## ContextGit Memory
+
+This project uses ContextGit for persistent AI memory across sessions.
+
+## Session Start (do this every time)
+
+Call \`project_memory_load\` immediately.
+Do not ask questions first. Read the snapshot, then start working.
+Start the next specific task from the snapshot — not an entire feature or milestone.
+One task per session unless it is trivially small.
+
+## When to save context
+
+Save once per commit. Every git commit deserves a paired \`project_memory_save\`.
+Skipping commits leaves their history blind — the diff survives, the *reason*
+does not. The save's body is what makes the commit binding worth pulling in
+three weeks.
+
+What the save body carries:
+- The **decision** behind the change — why this approach, not the other.
+- Any **approach abandoned** along the way (use \`replan:\` prefix if scope shifted).
+- The **open question** the commit raises — what is still unresolved.
+
+The body is NOT a restatement of the diff. Git already has the diff.
+
+Bad save: "Implemented apiFetch wrapper" — paraphrases the commit; git has it.
+
+Good save: "apiFetch wrapper — chose X-User-Id header over cookie auth because
+the extension can't share the host session cookie. Open: needs 401 handling."
+
+## Before risky exploration
+
+Call \`project_memory_branch\` to create an isolated context workspace before trying anything uncertain.
+
+## Before starting a task (multi-agent)
+
+Call \`project_task_claim\` to prevent other agents from duplicating your work.
+
+## When scope changes mid-session
+
+Write a \`project_memory_save\` with replan: prefix BEFORE building new scope:
+\`project_memory_save "replan: <what changed and why>"\`
+Then build the new scope. Then write a normal context commit when done.
+<!-- contextgit:end -->
+`
 ```
-## What a save is for
 
-A save records what git cannot reconstruct: a decision, a reason, an
-abandoned approach, an open question.
+- [ ] **Step 4: Rewrite `CONTEXT_COMMIT_SKILL`**
 
-Bad save: "Implemented apiFetch wrapper" — this paraphrases the commit
-message; git already has it.
+In the same file, locate the `CONTEXT_COMMIT_SKILL` constant (lines 90-129). Replace the **entire constant** with this version. The substantive changes are: the `description:` frontmatter is rewritten (currently embodies 02's rule) and the `## When to save context` body section is replaced. The "What makes a good commit message" and "How to call it" sections stay.
 
-Good save: "Chose X-User-Id header over cookie auth because the
-extension can't share Loqally's session cookie" — the decision, not the diff.
+```ts
+export const CONTEXT_COMMIT_SKILL = `---
+name: context-commit
+description: "Save project memory once per git commit. Every commit deserves a paired save; the body carries what git cannot reconstruct — the decision behind the change, any approach abandoned (use replan: prefix), the open question the commit raises. The body is never a paraphrase of the diff."
+---
 
+# ContextGit — Context Commit Discipline
+
+## When to save context
+
+Save once per commit. Every git commit deserves a paired \`project_memory_save\`.
+Skipping commits leaves their history blind — the diff survives, the *reason*
+does not. The save's body is what makes the commit binding worth pulling in
+three weeks.
+
+What the save body carries:
+- The **decision** behind the change — why this approach, not the other.
+- Any **approach abandoned** along the way (use \`replan:\` prefix if scope shifted).
+- The **open question** the commit raises — what is still unresolved.
+
+The body is NOT a restatement of the diff. Git already has the diff.
+
+Bad save: "Implemented apiFetch wrapper" — paraphrases the commit; git has it.
+
+Good save: "apiFetch wrapper — chose X-User-Id header over cookie auth because
+the extension can't share the host session cookie. Open: needs 401 handling."
+
+## What makes a good commit message
+
+A context commit message is a future-you briefing. Write it so the next agent session (or the next developer) can pick up exactly where this one left off.
+
+Structure:
+\\\`\\\`\\\`
+<one-line summary of what was done>
+
+What was decided: <the decision and why>
+What was built: <files changed, approach taken>
+Open questions: <anything unresolved>
+Next task: <the first concrete thing the next session should do>
+Git: <branch> | <commit hash if available>
+\\\`\\\`\\\`
+
+## How to call it
+
+Use the \`project_memory_save\` MCP tool (alias: \`context_commit\`). Pass the full message as the \`message\` argument.
+
+Do not skip this step when the work feels small. Small decisions compound. The next session starts blind without them.
+`
 ```
 
-(Note the blank line after the section so the next `## Session End` header is correctly separated.)
+The triple-backtick fences inside the template literal MUST be escaped as `\\\`\\\`\\\`` to match the existing source's escape convention. Do not change those.
 
-Apply the same insertion to `CONTEXT_COMMIT_SKILL` after its "A context save that only paraphrases a commit message is noise." line.
+- [ ] **Step 5: Run the tests to verify they pass**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+Run: `pnpm vitest run packages/cli/src/lib/init-helpers.test.ts -t "commit-binding"`
+Expected: PASS — all 5 new tests green.
 
-Run: `pnpm vitest run packages/cli/src/lib/init-helpers.test.ts -t "What a save is for"`
-Expected: PASS.
+- [ ] **Step 6: Run the full CLI test suite to catch regressions**
 
-- [ ] **Step 5: Commit**
+Run: `pnpm --filter contextgit test`
+Expected: all tests pass. **If an existing test asserts the old 02-rhythm text (something like "3–5 genuinely open threads" or "Do not save merely because"), it will now fail — update that test to assert the new commit-binding text instead.** The old assertion was correct under 0.1.10's rule; it is wrong under 0.2.0's rule.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add packages/cli/src/lib/init-helpers.ts packages/cli/src/lib/init-helpers.test.ts
-git commit -m "feat(cli): save-rhythm strings gain Bad/Good \"What a save is for\" example"
+git commit -m "feat(cli): save-rhythm strings — commit-binding model, supersedes 02 rhythm"
 ```
 
 ---
@@ -1785,10 +1899,13 @@ output now carries a short 6-char handle. Close by handle, close by subject,
 or pass `closes_threads: ['handle-or-subject', …]` on a save — the resolution
 is atomic with the rest of the save.
 
-**Save-rhythm guidance gets a negative example.** The CLAUDE.md fragment and
-context-commit skill now show what a good save looks like vs. one that just
-paraphrases the commit message. Re-run `contextgit init` to pick up the new
-strings.
+**Save-rhythm rule corrected to commit-binding model.** 0.1.10 dropped the
+"save every git commit" rule in favor of "save ~3x per session." A usage audit
+disproved that — the save is bound to its commit, and that binding is the value.
+The new rule, written into the `contextgit init` strings: save once per commit;
+the body carries the decision, any abandoned approach (via `replan:`), and the
+open question the commit raises — never a paraphrase of the diff. Re-run
+`contextgit init` to pick up the new strings.
 ```
 
 In the "Migrations" subsection of the 0.2.0 entry, change:
