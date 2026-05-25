@@ -235,6 +235,43 @@ describe('SnapshotFormatter inline claim status', () => {
     expect(out).toContain('+3 stale')
   })
 
+  it('agents-md prefixes each open thread with a 6-char [handle]', () => {
+    const snapshot = makeSnapshot({
+      openThreads: [
+        {
+          id: 'abcdef1234567890',
+          projectId: 'p', branchId: 'b',
+          description: 'thread one',
+          status: 'open',
+          openedInCommit: 'c1',
+          createdAt: new Date(),
+        },
+      ],
+    })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).toContain('[abcdef]')
+    // Confirm handle is exactly 6 chars and equals id.slice(0,6)
+    const handleMatch = out.match(/\[([a-zA-Z0-9_-]+)\] \[FREE\] thread one/)
+    expect(handleMatch?.[1]).toBe('abcdef')
+  })
+
+  it('text format prefixes each open thread with a 6-char [handle]', () => {
+    const snapshot = makeSnapshot({
+      openThreads: [
+        {
+          id: 'xyz789abcdef0000',
+          projectId: 'p', branchId: 'b',
+          description: 'thread two',
+          status: 'open',
+          openedInCommit: 'c1',
+          createdAt: new Date(),
+        },
+      ],
+    })
+    const out = formatter.format(snapshot, 'text')
+    expect(out).toContain('[xyz789]')
+  })
+
   it('agents-md renders the Git section with live branch/HEAD/commit count when set', () => {
     const snapshot = makeSnapshot({
       branchName: 'feature/x',

@@ -62,7 +62,7 @@ export class SnapshotFormatter {
       const threads = uniqueThreads
         .map(
           (t) =>
-            `- ${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
+            `- [${t.id.slice(0, 6)}] ${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
         )
         .join('\n')
       const threadsSection = countLine ? `${threads || '(none)'}\n${countLine}` : (threads || '(none)')
@@ -92,7 +92,7 @@ export class SnapshotFormatter {
     const threads = openThreads
       .map(
         (t) =>
-          `${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
+          `[${t.id.slice(0, 6)}] ${claimLabel(t, activeClaims)} ${t.description}  (opened ${t.createdAt.toLocaleDateString()}, ${t.workflowType ?? 'interactive'})`,
       )
       .join('\n')
     const threadsSectionText = countLine ? `${threads || '(none)'}\n${countLine}` : (threads || '(none)')
