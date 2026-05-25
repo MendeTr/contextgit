@@ -177,4 +177,35 @@ describe('thread_archive table (v8 migration)', () => {
     expect(found?.id).toBe('def456-rest')
     expect(found?.archivedReason).toBe('manual')
   })
+
+  it('sweepStaleThreads archives currently-decayed threads and returns counts', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    const now = Date.now()
+    const olderTouch = now - 60 * 60 * 1000
+
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p7', 'p7', olderTouch)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b7', 'p7', 'main', 'main', 'active', olderTouch)
+    // Touch commit + 35 newer commits to guarantee branchCommitsSince >= 30.
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c0', 'b7', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', olderTouch)
+    const insertCommit = db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    for (let i = 1; i <= 35; i++) {
+      insertCommit.run(`c${i}`, 'b7', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', olderTouch + i * 1000)
+    }
+    q.insertThread('old-thread', 'subject', 'p7', 'b7', 'c0', 'interactive')
+
+    const result = q.sweepStaleThreads('p7', now)
+    expect(result.archived).toBeGreaterThanOrEqual(1)
+
+    const inThreads = db.prepare(`SELECT id FROM threads WHERE id = 'old-thread'`).get()
+    expect(inThreads).toBeUndefined()
+    const inArchive = db.prepare(`SELECT id FROM thread_archive WHERE id = 'old-thread'`).get()
+    expect(inArchive).toBeDefined()
+  })
 })

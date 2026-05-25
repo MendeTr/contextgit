@@ -796,6 +796,39 @@ export class Queries {
     return toArchivedThread(rows[0])
   }
 
+  /**
+   * Project-scoped sweep run by createCommit at the end of every save: any open
+   * thread on this project that classifies as `stale` or `expired` is moved to
+   * `thread_archive`. Returns counts by reason for the save response.
+   */
+  sweepStaleThreads(projectId: string, now: number): { archived: number; byReason: { 'stale-age': number; 'stale-distance': number; 'watch-expired': number } } {
+    const threads = this.listOpenThreads(projectId)
+    const byReason = { 'stale-age': 0, 'stale-distance': 0, 'watch-expired': 0 }
+    let archived = 0
+
+    for (const t of threads) {
+      if (!t.stale && !t.expired) continue
+
+      let reason: 'stale-age' | 'stale-distance' | 'watch-expired'
+      if (t.expired) {
+        reason = 'watch-expired'
+      } else {
+        const touchId = t.lastTouchedCommit ?? t.openedInCommit
+        const tsRow = this.stmts.selectCommitCreatedAt.get(touchId) as { created_at: number } | undefined
+        const touchTs = tsRow?.created_at ?? t.createdAt.getTime()
+        const branchN = (this.stmts.countBranchCommitsSince.get(t.branchId, touchTs) as { n: number }).n
+        reason = branchN >= 30 ? 'stale-distance' : 'stale-age'
+      }
+
+      this.stmts.insertThreadArchive.run(null, null, now, reason, t.id)
+      this.stmts.deleteThread.run(t.id)
+      byReason[reason]++
+      archived++
+    }
+
+    return { archived, byReason }
+  }
+
   updateThreadLastTouched(threadId: string, commitId: string): void {
     this.stmts.updateThreadLastTouched.run(commitId, threadId)
   }
