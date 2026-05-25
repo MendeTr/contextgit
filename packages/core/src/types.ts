@@ -113,6 +113,13 @@ export interface Thread {
   expired?: boolean          // derived at read time — applies to kind='watch' only
 }
 
+export type ArchivedReason = 'stale-age' | 'stale-distance' | 'watch-expired' | 'manual'
+
+export interface ArchivedThread extends Thread {
+  archivedAt: Date
+  archivedReason: ArchivedReason
+}
+
 export interface TraceEntry {
   id: string
   projectId: string
@@ -186,7 +193,8 @@ export interface CommitInput {
   gitCommitSha?: string
   threads?: {
     open?: ThreadOpenInput[]
-    close?: Array<{ id: string; note: string }>
+    close?: Array<{ id: string; note: string }>     // legacy: direct-ID close, still works
+    closes?: string[]                                // 03 DELTA: handles or subjects (atomic close)
   }
 }
 
