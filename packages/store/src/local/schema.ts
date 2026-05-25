@@ -193,3 +193,32 @@ export const SCHEMA_V7_DDL = [
   `CREATE INDEX IF NOT EXISTS idx_trace_project ON trace(project_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_trace_branch  ON trace(branch_id, created_at DESC)`,
 ]
+
+// Migration v8 adds the thread_archive table — receives threads decayed past
+// staleness thresholds, expired watch notes, and manually-closed threads.
+// Mirrors the threads schema column-for-column, then adds archived_at and
+// archived_reason. The threads table never accumulates closed/stale rows after v8.
+export const CREATE_THREAD_ARCHIVE = `
+CREATE TABLE IF NOT EXISTS thread_archive (
+  id                  TEXT PRIMARY KEY,
+  project_id          TEXT NOT NULL REFERENCES projects(id),
+  branch_id           TEXT NOT NULL REFERENCES branches(id),
+  description         TEXT NOT NULL,
+  status              TEXT NOT NULL,
+  kind                TEXT NOT NULL,
+  workflow_type       TEXT,
+  opened_in_commit    TEXT NOT NULL REFERENCES commits(id),
+  last_touched_commit TEXT REFERENCES commits(id),
+  closed_in_commit    TEXT REFERENCES commits(id),
+  closed_note         TEXT,
+  created_at          INTEGER NOT NULL,
+  updated_at          INTEGER,
+  archived_at         INTEGER NOT NULL,
+  archived_reason     TEXT NOT NULL
+)
+`
+
+export const SCHEMA_V8_DDL = [
+  CREATE_THREAD_ARCHIVE,
+  `CREATE INDEX IF NOT EXISTS idx_thread_archive_project ON thread_archive(project_id, archived_at DESC)`,
+]
