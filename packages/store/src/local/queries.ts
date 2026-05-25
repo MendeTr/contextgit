@@ -6,6 +6,7 @@ import type { Database, Statement } from 'better-sqlite3'
 import type {
   Agent,
   AgentInput,
+  ArchivedThread,
   Branch,
   BranchInput,
   Claim,
@@ -116,6 +117,11 @@ interface ClaimRow {
   thread_id: string | null
 }
 
+interface ThreadArchiveRow extends ThreadRow {
+  archived_at: number
+  archived_reason: string
+}
+
 // ─── Row → domain type converters ───────────────────────────────────────────
 
 function toProject(row: ProjectRow): Project {
@@ -210,6 +216,14 @@ function toTraceEntry(row: TraceRow): TraceEntry {
   }
 }
 
+function toArchivedThread(row: ThreadArchiveRow): ArchivedThread {
+  return {
+    ...toThread(row),
+    archivedAt: new Date(row.archived_at),
+    archivedReason: row.archived_reason as ArchivedThread['archivedReason'],
+  }
+}
+
 function toAgent(row: AgentRow): Agent {
   return {
     id: row.id,
@@ -255,6 +269,10 @@ export class Queries {
     selectOpenThreads: Statement<[string]>
     selectOpenThreadsByBranch: Statement<[string]>
     reassignThreads: Statement<[string, string]>
+
+    insertThreadArchive: Statement
+    deleteThread: Statement<[string]>
+    selectArchivedThread: Statement<[string]>
 
     insertAgent: Statement
     upsertAgent: Statement
@@ -365,6 +383,21 @@ export class Queries {
       reassignThreads: db.prepare(
         `UPDATE threads SET branch_id = ? WHERE branch_id = ? AND status = 'open'`
       ),
+
+      // thread_archive (03 DELTA)
+      insertThreadArchive: db.prepare(`
+        INSERT INTO thread_archive
+          (id, project_id, branch_id, description, status, kind, workflow_type,
+           opened_in_commit, last_touched_commit, closed_in_commit, closed_note,
+           created_at, updated_at, archived_at, archived_reason)
+        SELECT
+           id, project_id, branch_id, description, status, kind, workflow_type,
+           opened_in_commit, last_touched_commit, ?, ?,
+           created_at, updated_at, ?, ?
+        FROM threads WHERE id = ?
+      `),
+      deleteThread: db.prepare(`DELETE FROM threads WHERE id = ?`),
+      selectArchivedThread: db.prepare(`SELECT * FROM thread_archive WHERE id = ?`),
 
       // Agents
       insertAgent: db.prepare(`
@@ -651,6 +684,22 @@ export class Queries {
 
   closeThread(threadId: string, closedInCommit: string, note: string): void {
     this.stmts.closeThread.run(closedInCommit, note, threadId)
+  }
+
+  /**
+   * Move an open thread from `threads` to `thread_archive`. Single transaction.
+   * `closedInCommit` is the commit triggering the archive (the save's new commit
+   * for manual closes; the last-touched commit for sweep-based archival).
+   */
+  archiveThread(threadId: string, reason: ArchivedThread['archivedReason'], closedInCommit: string | null): ArchivedThread {
+    const now = Date.now()
+    this.db.transaction(() => {
+      this.stmts.insertThreadArchive.run(closedInCommit, null, now, reason, threadId)
+      this.stmts.deleteThread.run(threadId)
+    })()
+    const row = this.stmts.selectArchivedThread.get(threadId) as ThreadArchiveRow | undefined
+    if (!row) throw new Error(`archiveThread: thread ${threadId} not found after move`)
+    return toArchivedThread(row)
   }
 
   /**

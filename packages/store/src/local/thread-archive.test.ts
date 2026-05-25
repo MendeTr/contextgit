@@ -69,4 +69,27 @@ describe('thread_archive table (v8 migration)', () => {
     expect(inArchive?.id).toBe('t1')
     expect(inArchive?.archived_reason).toBe('stale-distance')
   })
+
+  it('archiveThread moves an open thread to thread_archive with the given reason', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p2', 'proj2', now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b2', 'p2', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c2', 'b2', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+    q.insertThread('thr-1', 'subject one', 'p2', 'b2', 'c2', 'interactive')
+
+    const archived = q.archiveThread('thr-1', 'manual', 'c2')
+
+    expect(archived.id).toBe('thr-1')
+    expect(archived.archivedReason).toBe('manual')
+    expect(archived.closedInCommit).toBe('c2')
+    const inThreads = db.prepare(`SELECT id FROM threads WHERE id = 'thr-1'`).get()
+    expect(inThreads).toBeUndefined()
+  })
 })
