@@ -655,8 +655,67 @@ Call after a context branch experiment succeeds and you want to preserve the fin
 
   // ── project_memory_threads — review decayed threads (02 DELTA Step 3) ──────
 
-  const handleProjectMemoryThreads = async ({ filter }: { filter?: 'all' | 'stale' | 'expired-watch' | 'live' }) => {
+  const handleProjectMemoryThreads = async ({
+    filter,
+    close,
+    close_subject,
+    restore,
+  }: {
+    filter?: 'stale' | 'expired-watch' | 'live' | 'all' | 'archived'
+    close?: string
+    close_subject?: string
+    restore?: string
+  }) => {
     try {
+      // Action flags (mutually exclusive — first match wins; multiple is an error)
+      const actions = [close, close_subject, restore].filter(Boolean).length
+      if (actions > 1) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: pass at most one of close, close_subject, restore.' }],
+          isError: true,
+        }
+      }
+
+      if (close) {
+        const open = await ctx.store.findOpenThreadByHandle!(ctx.projectId, close.slice(0, 6))
+        if (!open) {
+          return { content: [{ type: 'text' as const, text: `No open thread matched handle '${close}'.` }], isError: true }
+        }
+        const branch = await ctx.store.getBranch(ctx.branchId)
+        await ctx.store.archiveThread!(open.id, 'manual', branch?.headCommitId ?? null)
+        return { content: [{ type: 'text' as const, text: `Closed thread ${open.id.slice(0, 6)} (${open.description}).` }] }
+      }
+
+      if (close_subject) {
+        const opens = await ctx.store.listOpenThreads(ctx.projectId)
+        const target = opens.find((t) => normalizeThreadSubject(t.description) === normalizeThreadSubject(close_subject))
+        if (!target) {
+          return { content: [{ type: 'text' as const, text: `No open thread matched subject '${close_subject}'.` }], isError: true }
+        }
+        const branch = await ctx.store.getBranch(ctx.branchId)
+        await ctx.store.archiveThread!(target.id, 'manual', branch?.headCommitId ?? null)
+        return { content: [{ type: 'text' as const, text: `Closed thread ${target.id.slice(0, 6)} (${target.description}).` }] }
+      }
+
+      if (restore) {
+        const archived = await ctx.store.findArchivedThreadByHandle!(ctx.projectId, restore.slice(0, 6))
+        if (!archived) {
+          return { content: [{ type: 'text' as const, text: `No archived thread matched handle '${restore}'.` }], isError: true }
+        }
+        await ctx.store.restoreThread!(archived.id)
+        return { content: [{ type: 'text' as const, text: `Restored thread ${archived.id.slice(0, 6)} (${archived.description}).` }] }
+      }
+
+      // Archived-list path
+      if (filter === 'archived') {
+        const archived = await ctx.store.listArchivedThreads!(ctx.projectId)
+        const lines = archived.map(
+          (t) => `[${t.id.slice(0, 6)}] (${t.archivedReason}, ${t.archivedAt.toISOString()}) ${t.description}`,
+        )
+        return { content: [{ type: 'text' as const, text: lines.length ? lines.join('\n') : '(no archived threads)' }] }
+      }
+
+      // Fall through to existing listing implementation for 'stale' | 'expired-watch' | 'live' | 'all'
       const threads = await ctx.store.listOpenThreads(ctx.projectId)
       const selected = threads.filter((t) => {
         if (filter === 'stale') return t.stale === true
@@ -698,11 +757,21 @@ Call after a context branch experiment succeeds and you want to preserve the fin
 
   const projectMemoryThreadsSchema = {
     filter: z
-      .enum(['all', 'stale', 'expired-watch', 'live'])
+      .enum(['all', 'stale', 'expired-watch', 'live', 'archived'])
       .default('all')
       .describe(
-        "Filter the result. 'stale' = open threads past decay threshold; 'expired-watch' = watch notes past TTL; 'live' = neither (what the default load returns); 'all' = everything with decay flags annotated.",
-      ),
+        "Filter the result. 'stale' = open threads past decay threshold; 'expired-watch' = watch notes past TTL; 'live' = neither (what the default load returns); 'all' = everything with decay flags annotated; 'archived' = rows in thread_archive.",
+      )
+      .optional(),
+    close: z.string().optional().describe(
+      'Close a thread by 6-char handle. Moves it to thread_archive with reason="manual".',
+    ),
+    close_subject: z.string().optional().describe(
+      'Close a thread by subject (normalized match). Moves it to thread_archive with reason="manual".',
+    ),
+    restore: z.string().optional().describe(
+      'Restore an archived thread by 6-char handle. Moves it back to threads.',
+    ),
   }
 
   // ── project_memory_trace — append a fine-tier note (02 DELTA Step 5) ──────
