@@ -55,10 +55,34 @@ Plain string still works — coerced to `{subject, kind:'open'}`. Watch notes dr
 
 ### Migrations
 
-Two automatic SQLite migrations apply on first use (`v6`, `v7`). No manual step required.
+Three automatic SQLite migrations apply on first use (`v6`, `v7`, `v8`). No manual step required.
 
 - `v6` — `threads.kind` (default `'open'`) + `threads.last_touched_commit`
 - `v7` — new `trace` table with indexes for windowed retrieval
+- `v8` — new `thread_archive` table + one-time sweep of currently-stale threads
+
+### Thread lifecycle and close ergonomics
+
+**Stale threads are archived, not just hidden.** A new `thread_archive` table
+stores threads that decay past staleness thresholds or whose watch TTL expires.
+On the first 0.2.0 run, every currently-stale thread is swept into the archive
+in a single migration transaction. Subsequent sweeps run at the end of every
+`project_memory_save`. Archived threads are fully recoverable via
+`project_memory_threads --restore`.
+
+**Closing a thread is a one-step action.** Every thread in `project_memory_load`
+output now carries a short 6-char handle. Close by handle, close by subject,
+or pass `closes_threads: ['handle-or-subject', …]` on a save — the resolution
+is atomic with the rest of the save (handle → subject → already-archived no-op
+→ atomic error if still unresolved).
+
+**Save-rhythm rule corrected to commit-binding model.** 0.1.10 dropped the
+"save every git commit" rule in favor of "save ~3x per session." A usage audit
+disproved that — the save is bound to its commit, and that binding is the value.
+The new rule, written into the `contextgit init` strings: save once per commit;
+the body carries the decision, any abandoned approach (via `replan:`), and the
+open question the commit raises — never a paraphrase of the diff. Re-run
+`contextgit init` to pick up the new strings.
 
 ### Known scope
 
