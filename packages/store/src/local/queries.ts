@@ -280,6 +280,9 @@ export class Queries {
 
     listArchivedByProject: Statement<[string]>
 
+    findOpenByHandle: Statement<[string, string]>
+    findArchivedByHandle: Statement<[string, string]>
+
     insertAgent: Statement
     upsertAgent: Statement
     selectAgent: Statement<[string]>
@@ -421,6 +424,17 @@ export class Queries {
 
       listArchivedByProject: db.prepare(`
         SELECT * FROM thread_archive WHERE project_id = ? ORDER BY archived_at DESC
+      `),
+
+      findOpenByHandle: db.prepare(`
+        SELECT * FROM threads
+        WHERE project_id = ? AND status = 'open' AND id LIKE ? || '%'
+        LIMIT 2
+      `),
+      findArchivedByHandle: db.prepare(`
+        SELECT * FROM thread_archive
+        WHERE project_id = ? AND id LIKE ? || '%'
+        LIMIT 2
       `),
 
       // Agents
@@ -757,6 +771,29 @@ export class Queries {
       if (normalizeThreadSubject(row.description) === normalized) return toThread(row)
     }
     return undefined
+  }
+
+  /**
+   * Resolve a 6-char handle to an open thread on the project.
+   * Returns undefined if no match; throws if multiple match (collision).
+   */
+  findOpenThreadByHandle(projectId: string, handle: string): Thread | undefined {
+    const rows = this.stmts.findOpenByHandle.all(projectId, handle) as ThreadRow[]
+    if (rows.length === 0) return undefined
+    if (rows.length > 1) {
+      throw new Error(`findOpenThreadByHandle: handle '${handle}' matches ${rows.length} threads`)
+    }
+    const now = Date.now()
+    return this.attachDecayFlags(toThread(rows[0]), now)
+  }
+
+  findArchivedThreadByHandle(projectId: string, handle: string): ArchivedThread | undefined {
+    const rows = this.stmts.findArchivedByHandle.all(projectId, handle) as ThreadArchiveRow[]
+    if (rows.length === 0) return undefined
+    if (rows.length > 1) {
+      throw new Error(`findArchivedThreadByHandle: handle '${handle}' matches ${rows.length} threads`)
+    }
+    return toArchivedThread(rows[0])
   }
 
   updateThreadLastTouched(threadId: string, commitId: string): void {

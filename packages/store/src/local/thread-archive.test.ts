@@ -138,4 +138,43 @@ describe('thread_archive table (v8 migration)', () => {
     expect(archived.map((t) => t.id).sort()).toEqual(['a', 'b'])
     expect(archived[0].archivedReason).toBe('manual')
   })
+
+  it('findOpenThreadByHandle returns the thread whose id starts with the 6-char handle', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p5', 'p5', now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b5', 'p5', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c5', 'b5', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+    q.insertThread('abc123-rest', 's', 'p5', 'b5', 'c5', 'interactive')
+
+    const found = q.findOpenThreadByHandle('p5', 'abc123')
+    expect(found?.id).toBe('abc123-rest')
+
+    const notFound = q.findOpenThreadByHandle('p5', 'zzzzzz')
+    expect(notFound).toBeUndefined()
+  })
+
+  it('findArchivedThreadByHandle returns the archived thread whose id starts with the 6-char handle', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p6', 'p6', now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b6', 'p6', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c6', 'b6', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+    q.insertThread('def456-rest', 's', 'p6', 'b6', 'c6', 'interactive')
+    q.archiveThread('def456-rest', 'manual', 'c6')
+
+    const found = q.findArchivedThreadByHandle('p6', 'def456')
+    expect(found?.id).toBe('def456-rest')
+    expect(found?.archivedReason).toBe('manual')
+  })
 })
