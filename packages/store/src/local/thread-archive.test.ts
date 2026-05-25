@@ -92,4 +92,28 @@ describe('thread_archive table (v8 migration)', () => {
     const inThreads = db.prepare(`SELECT id FROM threads WHERE id = 'thr-1'`).get()
     expect(inThreads).toBeUndefined()
   })
+
+  it('restoreThread moves an archived thread back to threads', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p3', 'p3', now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b3', 'p3', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c3', 'b3', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+    q.insertThread('thr-2', 'subj', 'p3', 'b3', 'c3', 'interactive')
+    q.archiveThread('thr-2', 'manual', 'c3')
+
+    const restored = q.restoreThread('thr-2')
+    expect(restored.id).toBe('thr-2')
+    expect(restored.status).toBe('open')
+    const inArchive = db.prepare(`SELECT id FROM thread_archive WHERE id = 'thr-2'`).get()
+    expect(inArchive).toBeUndefined()
+    const inThreads = db.prepare(`SELECT id FROM threads WHERE id = 'thr-2'`).get() as { id: string } | undefined
+    expect(inThreads?.id).toBe('thr-2')
+  })
 })

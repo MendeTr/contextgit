@@ -274,6 +274,10 @@ export class Queries {
     deleteThread: Statement<[string]>
     selectArchivedThread: Statement<[string]>
 
+    restoreFromArchive: Statement
+    deleteFromArchive: Statement<[string]>
+    selectThread: Statement<[string]>
+
     insertAgent: Statement
     upsertAgent: Statement
     selectAgent: Statement<[string]>
@@ -398,6 +402,20 @@ export class Queries {
       `),
       deleteThread: db.prepare(`DELETE FROM threads WHERE id = ?`),
       selectArchivedThread: db.prepare(`SELECT * FROM thread_archive WHERE id = ?`),
+
+      restoreFromArchive: db.prepare(`
+        INSERT INTO threads
+          (id, project_id, branch_id, description, status, kind, workflow_type,
+           opened_in_commit, last_touched_commit, closed_in_commit, closed_note,
+           created_at, updated_at)
+        SELECT
+           id, project_id, branch_id, description, 'open', kind, workflow_type,
+           opened_in_commit, last_touched_commit, NULL, NULL,
+           created_at, ?
+        FROM thread_archive WHERE id = ?
+      `),
+      deleteFromArchive: db.prepare(`DELETE FROM thread_archive WHERE id = ?`),
+      selectThread: db.prepare(`SELECT * FROM threads WHERE id = ?`),
 
       // Agents
       insertAgent: db.prepare(`
@@ -700,6 +718,21 @@ export class Queries {
     const row = this.stmts.selectArchivedThread.get(threadId) as ThreadArchiveRow | undefined
     if (!row) throw new Error(`archiveThread: thread ${threadId} not found after move`)
     return toArchivedThread(row)
+  }
+
+  /**
+   * Move a row from `thread_archive` back to `threads` with `status='open'`,
+   * clearing closed_in_commit and closed_note (the restore semantically reopens it).
+   */
+  restoreThread(threadId: string): Thread {
+    const now = Date.now()
+    this.db.transaction(() => {
+      this.stmts.restoreFromArchive.run(now, threadId)
+      this.stmts.deleteFromArchive.run(threadId)
+    })()
+    const row = this.stmts.selectThread.get(threadId) as ThreadRow | undefined
+    if (!row) throw new Error(`restoreThread: thread ${threadId} not found after move`)
+    return toThread(row)
   }
 
   /**
