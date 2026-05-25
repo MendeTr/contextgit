@@ -5,6 +5,14 @@
 **Target version:** 0.2.0 (the connectivity patch ships first as 0.1.x)
 **Scope:** `packages/core`, `packages/store`, `packages/mcp`, `packages/cli` (CLAUDE.md fragment + hooks)
 
+> **Correction (2026-05-25):** the save-rhythm rule in this spec ("save ~3x per
+> session, not per commit") was **wrong** and is **superseded by
+> `03_ContextGit_DELTA_thread_lifecycle.md`, Fix 3**. A usage audit established that
+> the save is *bound* to its commit and that binding is the value — saving per
+> commit is correct; the save *body* must carry decisions/dead-ends, not paraphrase
+> the diff. The affected sections below (Save Rhythm; the "Middle — Commits" tier)
+> are annotated inline. Read `03` Fix 3 as the authoritative rule.
+
 ---
 
 ## Why this spec exists
@@ -60,8 +68,8 @@ spec begins — until the `@CLAUDE.contextgit.md` include is wired, the save hal
 the loop is physically disconnected and no measurement of this work is meaningful.
 The connectivity patch's audit result is the baseline this spec is measured against.
 
-The save-rhythm replacement text in the "Save Rhythm" section below is shared
-verbatim with the connectivity spec — keep the two identical.
+The save-rhythm rule is defined authoritatively in `03` Fix 3 — see the Correction
+notice at the top of this file.
 
 ---
 
@@ -70,12 +78,13 @@ verbatim with the connectivity spec — keep the two identical.
 | Tier | Name | Resolution | Owns | Goes in default load? |
 |------|------|------------|------|----------------------|
 | Coarse | **Roadmap** | Intent, next-task pointer, decision rationale, curated threads | "Where are we, what's unresolved, why" | Yes — generated fresh each load |
-| Middle | **Commits** | Per-commit milestone summary | "What changed, when" | No — git owns this |
+| Middle | **Commits** | Per-commit milestone summary | "What changed" (git) + the intent bound to that commit (the save) | No — windowed |
 | Fine | **Trace** | Step-level reasoning notes | "Why we did/didn't do X" | No — pull-only, windowed |
 
-The reframe in one sentence: **git is the system of record for the middle tier;
-ContextGit's job is the coarse tier and the fine tier, and to make them both
-retrievable without bloating context.**
+The reframe in one sentence: **git records what changed at each commit; the save
+bound to that commit records the intent — together they let any future puller
+reconstruct code and intent at any commit. ContextGit's job is the coarse and fine
+tiers plus that commit-bound intent layer.**
 
 ### Coarse — Roadmap
 
@@ -105,11 +114,16 @@ keeping small, current, and free of anything git can answer itself.
 
 ### Middle — Commits
 
-No change to what is stored. The change is editorial: agents stop being told to
-write commit-summary saves that paraphrase the git commit message. A
-`project_memory_save` is still pinned to a git commit SHA (`gitCommitSha`) but its
-*body* should carry roadmap deltas and trace notes — not a restatement of what
-`git log` already says.
+> **Corrected per `03` Fix 3.** The original text here said agents should *stop*
+> writing per-commit saves. That was wrong. A save is *bound* to a commit and the
+> binding is the value: git holds the diff, the save holds the intent, and a future
+> puller needs both at every commit. So a save is written **per commit** — the
+> correction is to the *body*, not the frequency.
+
+A `project_memory_save` is pinned to a git commit SHA (`gitCommitSha`) — that
+pairing is its primary job. Its *body* must not paraphrase the diff (git has that);
+it carries what the diff cannot show — the decision behind the change, an abandoned
+approach, an open question the commit raises. Both jobs, one save, every commit.
 
 ### Fine — Trace (new)
 
@@ -207,29 +221,22 @@ live; nothing is lost, everything off-list is one explicit call away.
 
 ---
 
-## Save rhythm — shared with the prerequisite patch
+## Save rhythm
 
-This is the exact replacement framing for `CLAUDE_MD_FRAGMENT`,
-`CONTEXT_COMMIT_SKILL`, and the `CONTEXTGIT_HOOKS` `additionalContext` strings.
-Wording is deliberate and should not be softened further or re-hardened.
+> **This section is SUPERSEDED by `03_ContextGit_DELTA_thread_lifecycle.md`, Fix 3.**
+> The rule below ("save ~3x per session, not per commit") was wrong. The correct
+> rule: a save is written **per commit** because it is *bound* to that commit;
+> the save body carries decisions / abandoned approaches / open questions, not a
+> paraphrase of the diff. The `PostToolUse` hook removal still stands. `03` Fix 3
+> is authoritative; the text below is kept only to record what changed and why.
 
-**Old rule (remove):** "Every git commit = immediate context commit. Do not batch.
-Do not proceed until both are done."
+~~Call `project_memory_save` at session end plus ~3x per session, not per commit.~~
+Superseded — see `03` Fix 3.
 
-**New rule:**
-
-- Call `project_memory_save` at **session end**, always — a focused summary plus
-  the 3–5 genuinely open threads for the next session.
-- Call `project_memory_save` mid-session **only when project state changes in a way
-  git does not capture**: a decision made, an approach abandoned, a thread opened or
-  closed, scope changed (`replan:` prefix), an architectural choice.
-- Do **not** save merely because a git commit happened. Git is the record of what
-  changed. A context save that only paraphrases a commit message is noise.
-- `project_memory_branch` before risky exploration — unchanged, still encouraged.
-
-The `PostToolUse` hook with the `Bash(git commit*)` condition is **removed**, not
-softened. It is the mechanism that manufactures per-commit noise; a gentler message
-on the same trigger still fires on every commit. The `SessionStart` hook stays.
+What still stands from the original section: the `PostToolUse` hook with the
+`Bash(git commit*)` condition is **removed** (it manufactured a hard MANDATORY
+prompt on every commit). The `SessionStart` hook stays. `project_memory_branch`
+before risky exploration is unchanged.
 
 ---
 
@@ -256,7 +263,7 @@ on the same trigger still fires on every commit. The `SessionStart` hook stays.
 ### Unchanged
 
 `project_memory_save`, `project_memory_branch`, merge, claim tools — surface
-unchanged. Only the *guidance* on when to call `save` changes (see Save Rhythm).
+unchanged. Only the *guidance* on when to call `save` changes (see `03` Fix 3).
 
 ---
 
@@ -316,9 +323,9 @@ seam is worth recording now:
 - **Coarse tier (roadmap intent + open threads)** — this is the natural shared
   object. One team, one roadmap, one open-thread set. If teams are built, this is
   the tier that syncs to Supabase and the tier the contributor review-gate guards.
-- **Middle tier (commit summaries)** — git already syncs this; a team is on the same
-  repo. Nothing to sync. This is a direct benefit of the granularity reframe: shared
-  context no longer means shipping a second copy of git history.
+- **Middle tier (commit-bound saves)** — git already syncs the diffs; the saves
+  bound to those commits sync with them. This is the layer that lets a teammate
+  pull at any commit and get both code and intent.
 - **Fine tier (trace)** — almost certainly **local-first with explicit promotion**,
   not auto-synced. A teammate's minute-by-minute dead-end log is noise to everyone
   else. A dead end worth sharing gets *promoted* into a shared open thread or
@@ -377,20 +384,21 @@ If 1–7 hold, the granularity restratification worked.
 This spec rests on a principle, confirmed by Mende: **ContextGit stores only what
 exists nowhere else.**
 
-Applied honestly, this cuts sharper than "keep coarse, drop middle":
+Applied honestly:
 
-- The **middle tier** (commit summaries) is dropped — git holds it.
-- Even within the **coarse tier**, milestone *status* is partly reconstructable from
-  merged PRs and tags. The genuinely irreducible part is **intent and unresolved
-  state** — why this is being built, what was decided against, what is still open.
-- The **fine tier** (trace) is irreducible by definition — dead ends and rejected
-  approaches exist in no other system.
+- The diff itself is git's — never paraphrase it into a save.
+- But the **intent bound to each commit** exists nowhere else: why the change was
+  made, what was rejected, what question it raises. That is what the per-commit
+  save carries (see `03` Fix 3).
+- The **coarse roadmap** — intent, next-task pointer, open threads — exists nowhere
+  else. (Milestone *status* is reconstructable from PRs and tags, so it is not
+  stored; it is generated live.)
+- The **fine trace** — dead ends and rejected approaches — is irreducible by
+  definition.
 
-So the product is not "a memory layer." It is **the memory of intent and unresolved
-state — the things git structurally cannot hold.** Roadmap status that git can
-reconstruct is the least important thing the roadmap carries; intent and open
-threads are the point.
+So the product is not "a memory layer." It is **the memory of intent — bound to
+each commit, surfaced as a roadmap, and traceable down to abandoned approaches —
+the things git structurally cannot hold.**
 
-Two independent sources support this: the Claude Code audit ("the unique signal was
-open_threads") and the GCC ablation (the milestone-summary tier is the weakest).
-The decision is settled — this is no longer an open question.
+Two independent sources support this: the Claude Code audits and the GCC ablation.
+The decision is settled.
