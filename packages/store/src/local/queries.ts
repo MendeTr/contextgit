@@ -278,6 +278,8 @@ export class Queries {
     deleteFromArchive: Statement<[string]>
     selectThread: Statement<[string]>
 
+    listArchivedByProject: Statement<[string]>
+
     insertAgent: Statement
     upsertAgent: Statement
     selectAgent: Statement<[string]>
@@ -416,6 +418,10 @@ export class Queries {
       `),
       deleteFromArchive: db.prepare(`DELETE FROM thread_archive WHERE id = ?`),
       selectThread: db.prepare(`SELECT * FROM threads WHERE id = ?`),
+
+      listArchivedByProject: db.prepare(`
+        SELECT * FROM thread_archive WHERE project_id = ? ORDER BY archived_at DESC
+      `),
 
       // Agents
       insertAgent: db.prepare(`
@@ -733,6 +739,11 @@ export class Queries {
     const row = this.stmts.selectThread.get(threadId) as ThreadRow | undefined
     if (!row) throw new Error(`restoreThread: thread ${threadId} not found after move`)
     return toThread(row)
+  }
+
+  listArchivedThreads(projectId: string): ArchivedThread[] {
+    const rows = this.stmts.listArchivedByProject.all(projectId) as ThreadArchiveRow[]
+    return rows.map(toArchivedThread)
   }
 
   /**

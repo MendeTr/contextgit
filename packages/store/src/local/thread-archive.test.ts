@@ -116,4 +116,26 @@ describe('thread_archive table (v8 migration)', () => {
     const inThreads = db.prepare(`SELECT id FROM threads WHERE id = 'thr-2'`).get() as { id: string } | undefined
     expect(inThreads?.id).toBe('thr-2')
   })
+
+  it('listArchivedThreads returns archived rows for the project in archive-date order', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p4', 'p4', now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b4', 'p4', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c4', 'b4', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+    q.insertThread('a', 'subj-a', 'p4', 'b4', 'c4', 'interactive')
+    q.insertThread('b', 'subj-b', 'p4', 'b4', 'c4', 'interactive')
+    q.archiveThread('a', 'manual', 'c4')
+    q.archiveThread('b', 'manual', 'c4')
+
+    const archived = q.listArchivedThreads('p4')
+    expect(archived.map((t) => t.id).sort()).toEqual(['a', 'b'])
+    expect(archived[0].archivedReason).toBe('manual')
+  })
 })
