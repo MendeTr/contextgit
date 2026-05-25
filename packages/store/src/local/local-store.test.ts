@@ -616,6 +616,29 @@ describe('LocalStore (in-memory)', () => {
     }
   })
 
+  it('archiveThread + restoreThread round-trip via LocalStore', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    const commit = await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'm', content: 'c', summary: 's',
+      commitType: 'manual',
+      threads: { open: ['subj-arch'] },
+    })
+    const open = await store.listOpenThreads(project.id)
+    const thread = open[0]
+
+    const archived = await store.archiveThread!(thread.id, 'manual', commit.id)
+    expect(archived.archivedReason).toBe('manual')
+
+    const list = await store.listArchivedThreads!(project.id)
+    expect(list.map((t) => t.id)).toContain(thread.id)
+
+    await store.restoreThread!(thread.id)
+    const reopened = await store.listOpenThreads(project.id)
+    expect(reopened.map((t) => t.id)).toContain(thread.id)
+  })
+
   it('opens distinct threads when normalized subjects differ', async () => {
     const project = await store.createProject({ name: 'p' })
     const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })

@@ -18,6 +18,7 @@ const require = createRequire(import.meta.url)
 import type {
   Agent,
   AgentInput,
+  ArchivedThread,
   Branch,
   BranchInput,
   Claim,
@@ -330,6 +331,54 @@ export class LocalStore implements ContextStore {
   syncThread(thread: Thread): Promise<Thread> {
     try {
       return Promise.resolve(this.q.syncThread(thread))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  archiveThread(threadId: string, reason: ArchivedThread['archivedReason'], closedInCommit: string | null): Promise<ArchivedThread> {
+    try {
+      return Promise.resolve(this.q.archiveThread(threadId, reason, closedInCommit))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  restoreThread(threadId: string): Promise<Thread> {
+    try {
+      return Promise.resolve(this.q.restoreThread(threadId))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  listArchivedThreads(projectId: string): Promise<ArchivedThread[]> {
+    try {
+      return Promise.resolve(this.q.listArchivedThreads(projectId))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  findOpenThreadByHandle(projectId: string, handle: string): Promise<Thread | undefined> {
+    try {
+      return Promise.resolve(this.q.findOpenThreadByHandle(projectId, handle))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  findArchivedThreadByHandle(projectId: string, handle: string): Promise<ArchivedThread | undefined> {
+    try {
+      return Promise.resolve(this.q.findArchivedThreadByHandle(projectId, handle))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  sweepStaleThreads(projectId: string, now: number): Promise<{ archived: number; byReason: Record<'stale-age' | 'stale-distance' | 'watch-expired', number> }> {
+    try {
+      return Promise.resolve(this.q.sweepStaleThreads(projectId, now))
     } catch (e) {
       return Promise.reject(e)
     }
