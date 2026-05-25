@@ -29,30 +29,36 @@ describe('thread_archive table (v8 migration)', () => {
   })
 
   it('one-time sweep moves currently-stale threads to thread_archive on first v8 run', () => {
-    // Note: this test exercises v8 fresh — runMigrations already ran in beforeEach,
-    // so we close and re-open with seeded data on the v7 schema first.
-    db.close()
-    db = new Database(':memory:')
-
-    // Just run all migrations (v8 included with empty thread_archive), then seed a
-    // thread directly into the archive-eligible state and re-run the sweep helper.
-    runMigrations(db)
-
-    // Seed minimal project + branch + commit + thread
+    // Seed scenario: a thread touched at commit c0, then 35 newer commits on the
+    // same branch since touch. classifyThread sees branchCommitsSince = 35 >= 30,
+    // returns 'stale', and the migration sweep attributes the reason as
+    // 'stale-distance' (since branchN >= 30 in the helper's reason logic).
     const now = Date.now()
-    const old = now - 365 * 24 * 60 * 60 * 1000 // a year ago — guaranteed stale-age
-    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p1', 'proj', old)
+    const olderTouch = now - 60 * 60 * 1000 // 1 hour ago
+
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p1', 'proj', olderTouch)
     db.prepare(
       `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run('b1', 'p1', 'main', 'main', 'active', old)
+    ).run('b1', 'p1', 'main', 'main', 'active', olderTouch)
+
+    // Touch commit (the thread points here)
     db.prepare(
       `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run('c1', 'b1', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', old)
+    ).run('c0', 'b1', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', olderTouch)
+
+    // 35 newer commits after the touch — guarantees branchCommitsSince >= 30, which
+    // is the classifyThread staleness threshold for 'open' threads.
+    const stmt = db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    for (let i = 1; i <= 35; i++) {
+      stmt.run(`c${i}`, 'b1', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', olderTouch + i * 1000)
+    }
+
     db.prepare(
       `INSERT INTO threads (id, project_id, branch_id, description, status, kind, opened_in_commit, last_touched_commit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run('t1', 'p1', 'b1', 'old thread', 'open', 'open', 'c1', 'c1', old)
+    ).run('t1', 'p1', 'b1', 'old thread', 'open', 'open', 'c0', 'c0', olderTouch)
 
-    // Run the standalone sweep helper that v8 invokes
     const moved = sweepStaleThreadsOnMigration(db, now)
 
     expect(moved).toBeGreaterThanOrEqual(1)
@@ -61,6 +67,6 @@ describe('thread_archive table (v8 migration)', () => {
     const inArchive = db.prepare(`SELECT id, archived_reason FROM thread_archive WHERE id = 't1'`).get() as { id: string; archived_reason: string } | undefined
     expect(inThreads).toBeUndefined()
     expect(inArchive?.id).toBe('t1')
-    expect(['stale-age', 'stale-distance']).toContain(inArchive?.archived_reason)
+    expect(inArchive?.archived_reason).toBe('stale-distance')
   })
 })

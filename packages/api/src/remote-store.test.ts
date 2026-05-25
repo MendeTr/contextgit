@@ -127,9 +127,9 @@ describe('RemoteStore ↔ LocalStore integration', () => {
     const remoteSnapshot = await remote.getFormattedSnapshot(project.id, branch.id, 'text')
     const localSnapshot = await localStore.getFormattedSnapshot(project.id, branch.id, 'text')
 
-    // Both should contain the expected sections
-    expect(remoteSnapshot).toContain('=== PROJECT STATE ===')
-    expect(remoteSnapshot).toContain('Project scaffolded')
+    // Note: === PROJECT STATE === was removed in 02 DELTA gate 1 (commit b11e6e4).
+    // Both should contain the live current-branch section instead.
+    expect(remoteSnapshot).toContain('=== CURRENT BRANCH: main ===')
 
     // RemoteStore and LocalStore return the same formatted text
     expect(remoteSnapshot).toBe(localSnapshot)

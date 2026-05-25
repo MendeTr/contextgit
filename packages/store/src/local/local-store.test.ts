@@ -213,7 +213,8 @@ describe('LocalStore (in-memory)', () => {
     const project = await store.createProject({ name: 'fmt-test' })
     const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
     const text = await store.getFormattedSnapshot(project.id, branch.id, 'text')
-    expect(text).toContain('=== PROJECT STATE ===')
+    // Note: === PROJECT STATE === was removed in 02 DELTA gate 1 (commit b11e6e4).
+    // The text format now emits live ## Git facts + branch + threads + claims, no stored prose.
     expect(text).toContain('=== CURRENT BRANCH: main ===')
     expect(text).toContain('=== OPEN THREADS ===')
   })

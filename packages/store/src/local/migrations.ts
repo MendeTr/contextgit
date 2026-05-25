@@ -191,21 +191,15 @@ export function sweepStaleThreadsOnMigration(db: Database, now: number): number 
       now,
     })
 
-    // classifyThread checks commit-distance only for 'open' threads. The spec also
-    // calls for a calendar-time fallback for inactive projects: threads untouched for
-    // ≥90 days are archived as stale-age even when commit counts are below thresholds.
-    const STALE_AGE_MS = 90 * 24 * 60 * 60 * 1000 // 90 days
-    const msSince = now - touchTs
-    const isAgeStale = thread.kind !== 'watch' && msSince >= STALE_AGE_MS
-
-    if (flag !== 'stale' && flag !== 'expired' && !isAgeStale) continue
+    if (flag !== 'stale' && flag !== 'expired') continue
 
     const reason: 'stale-age' | 'stale-distance' | 'watch-expired' =
       flag === 'expired'
         ? 'watch-expired'
-        : // Age vs distance: if the commit-distance exceeds threshold use 'stale-distance',
-          // otherwise it must be age-based (including the calendar-time fallback).
-          branchN > 30 || projectN > 30
+        : // classifyThread can return 'stale' via either projectCommitsSince (>=8) or
+          // branchCommitsSince (>=30). Pick the more specific reason when commit-distance
+          // crossed the branch threshold; otherwise attribute to age (project-wide cadence).
+          branchN >= 30
           ? 'stale-distance'
           : 'stale-age'
 
