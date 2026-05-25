@@ -2,6 +2,7 @@ import type {
   Agent,
   AgentInput,
   AgentRole,
+  ArchivedThread,
   Branch,
   BranchInput,
   Claim,
@@ -45,6 +46,14 @@ export interface ContextStore {
   listOpenThreads(projectId: string): Promise<Thread[]>
   listOpenThreadsByBranch(branchId: string): Promise<Thread[]>
   syncThread(thread: Thread): Promise<Thread>
+
+  // Thread lifecycle (03 DELTA) — optional until SupabaseStore/RemoteStore implement
+  archiveThread?(threadId: string, reason: ArchivedThread['archivedReason'], closedInCommit: string | null): Promise<ArchivedThread>
+  restoreThread?(threadId: string): Promise<Thread>
+  listArchivedThreads?(projectId: string): Promise<ArchivedThread[]>
+  findOpenThreadByHandle?(projectId: string, handle: string): Promise<Thread | undefined>
+  findArchivedThreadByHandle?(projectId: string, handle: string): Promise<ArchivedThread | undefined>
+  sweepStaleThreads?(projectId: string, now: number): Promise<{ archived: number; byReason: Record<'stale-age' | 'stale-distance' | 'watch-expired', number> }>
 
   // Trace tier (02 DELTA Step 5) — append-only, pull-only, NEVER auto-loaded.
   // Optional on the interface: legacy stores may not implement these yet.

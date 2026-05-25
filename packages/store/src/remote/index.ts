@@ -319,4 +319,23 @@ export class RemoteStore implements ContextStore {
     const raw = await this.req<Raw[]>('GET', `/projects/${projectId}/agents`)
     return raw.map(parseAgent)
   }
+
+  archiveThread(): never {
+    throw new Error('archiveThread: not implemented in 0.2.0 — LocalStore only')
+  }
+  restoreThread(): never {
+    throw new Error('restoreThread: not implemented in 0.2.0 — LocalStore only')
+  }
+  listArchivedThreads(): never {
+    throw new Error('listArchivedThreads: not implemented in 0.2.0 — LocalStore only')
+  }
+  findOpenThreadByHandle(): never {
+    throw new Error('findOpenThreadByHandle: not implemented in 0.2.0 — LocalStore only')
+  }
+  findArchivedThreadByHandle(): never {
+    throw new Error('findArchivedThreadByHandle: not implemented in 0.2.0 — LocalStore only')
+  }
+  sweepStaleThreads(): never {
+    throw new Error('sweepStaleThreads: not implemented in 0.2.0 — LocalStore only')
+  }
 }
