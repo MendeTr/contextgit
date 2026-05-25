@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, SCHEMA_V7_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, SCHEMA_V7_DDL, SCHEMA_V8_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
 
 interface MigrationRow {
   version: number
@@ -98,6 +98,16 @@ const MIGRATIONS: Migration[] = [
       for (const sql of SCHEMA_V7_DDL) {
         db.exec(sql)
       }
+    },
+  },
+  {
+    version: 8,
+    name: 'thread_archive',
+    run(db) {
+      for (const sql of SCHEMA_V8_DDL) {
+        db.exec(sql)
+      }
+      // One-time sweep is added in Task 4 — this version creates the empty table only.
     },
   },
 ]
