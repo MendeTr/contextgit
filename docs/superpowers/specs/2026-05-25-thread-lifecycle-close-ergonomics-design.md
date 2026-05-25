@@ -116,7 +116,7 @@ Called from inside `project_memory_save`'s transaction, **after** the new commit
 - `sweepStaleThreads` ✓
 - Commit transaction ✓
 
-If any step fails, the whole save rolls back. The save response carries the archive counts so the agent sees `"archived 4 threads (2 stale-age, 2 watch-expired)"`.
+If any step fails, the whole save rolls back. The sweep runs silently — its archive counts are not surfaced in the save response (would require changing `createCommit`'s return type, deferred). The agent can inspect what was swept via `project_memory_threads filter='archived'` after the save.
 
 Sweep cost per save: one `SELECT * FROM threads WHERE project_id = ?` plus `classifyThread` per row plus an archive move for any decayed rows. At 17 live + 108 stale → first save archives 108 in one transaction; subsequent saves process ~17 rows, single-digit ms.
 
