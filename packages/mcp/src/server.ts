@@ -22,7 +22,7 @@ import os from 'os'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { simpleGit } from 'simple-git'
-import { ContextEngine, EmbeddingService, SnapshotFormatter, ClaudeMdGenerator } from '@contextgit/core'
+import { ContextEngine, EmbeddingService, SnapshotFormatter, ClaudeMdGenerator, normalizeThreadSubject } from '@contextgit/core'
 import { LocalStore, RemoteStore, SupabaseStore, resolveDbPath } from '@contextgit/store'
 import { loadConfig } from './config.js'
 import { captureGitFacts, captureGitMetadata } from './git-sync.js'
@@ -284,20 +284,18 @@ Skipping this call means you will duplicate work that was already done, re-explo
     message,
     content,
     open_threads,
-    close_thread_ids,
+    closes_threads,
   }: {
     message: string
     content: string
     open_threads?: string[]
-    close_thread_ids?: string[]
+    closes_threads?: string[]
   }) => {
     await autoSnapshot.onToolCall('context_commit')
     try {
-      const threads: { open?: string[]; close?: Array<{ id: string; note: string }> } = {}
+      const threads: { open?: string[]; closes?: string[] } = {}
       if (open_threads?.length) threads.open = open_threads
-      if (close_thread_ids?.length) {
-        threads.close = close_thread_ids.map(id => ({ id, note: 'Closed via context_commit' }))
-      }
+      if (closes_threads?.length) threads.closes = closes_threads
 
       const git = await captureGitMetadata(process.cwd())
       const commit = await ctx.engine.commit({
@@ -348,8 +346,8 @@ Skipping this call means you will duplicate work that was already done, re-explo
     open_threads: z.array(z.string()).optional().describe(
       'New open questions or blockers to track (each max 200 chars).',
     ),
-    close_thread_ids: z.array(z.string()).optional().describe(
-      'IDs of threads to close.',
+    closes_threads: z.array(z.string()).optional().describe(
+      'Threads to close. Each entry can be a 6-char handle (from the load) or a thread subject (normalized match). Resolution is atomic — the whole save fails if any entry stays unresolved.',
     ),
   }
 
