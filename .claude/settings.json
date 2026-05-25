@@ -9,7 +9,9 @@
       "Read(//Users/mendetrajovski/**)",
       "Bash(grep -rn \"SessionSnapshot\\\\s*=\\\\|: SessionSnapshot\\\\s*=\\\\|return {\\\\s*$\" packages --include=\"*.ts\")",
       "Bash(pnpm vitest *)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(pnpm --filter @contextgit/store test)",
+      "Bash(node -e \"const {createRequire} = require\\('module'\\); const r = createRequire\\(import.meta.url\\);\")"
     ]
   },
   "hooks": {
