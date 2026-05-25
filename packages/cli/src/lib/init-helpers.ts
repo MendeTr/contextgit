@@ -24,25 +24,22 @@ One task per session unless it is trivially small.
 
 ## When to save context
 
-Call \`project_memory_save\` at **session end**, always — a focused summary plus the
-3–5 genuinely open threads for the next session.
+Save once per commit. Every git commit deserves a paired \`project_memory_save\`.
+Skipping commits leaves their history blind — the diff survives, the *reason*
+does not. The save's body is what makes the commit binding worth pulling in
+three weeks.
 
-Call \`project_memory_save\` mid-session **only when project state changes in a way
-git does not capture**: a decision made, an approach abandoned, a thread opened or
-closed, scope changed (\`replan:\` prefix), an architectural choice.
+What the save body carries:
+- The **decision** behind the change — why this approach, not the other.
+- Any **approach abandoned** along the way (use \`replan:\` prefix if scope shifted).
+- The **open question** the commit raises — what is still unresolved.
 
-Do **not** save merely because a git commit happened. Git is the record of what
-changed. A context save that only paraphrases a commit message is noise.
+The body is NOT a restatement of the diff. Git already has the diff.
 
-## Session End (do this every time)
+Bad save: "Implemented apiFetch wrapper" — paraphrases the commit; git has it.
 
-Before stopping work for any reason, call \`project_memory_save\` with:
-- What was built this session
-- Key decisions and why
-- Open threads and blockers
-- The first concrete task for the next session
-
-Do not end a session without a context commit. The next session starts blind without it.
+Good save: "apiFetch wrapper — chose X-User-Id header over cookie auth because
+the extension can't share the host session cookie. Open: needs 401 handling."
 
 ## Before risky exploration
 
@@ -89,22 +86,29 @@ export function writeClaude(
 
 export const CONTEXT_COMMIT_SKILL = `---
 name: context-commit
-description: "Save project memory when project state changes in a way git does not capture: a key decision made, an approach abandoned, a thread opened or closed, scope changed (replan: prefix), or at session end. Do not save merely because a git commit happened — git is the record of what changed; a context save that only paraphrases a commit message is noise. Triggers: session ending, decision made, approach abandoned, thread opened or closed, scope changed, architectural choice."
+description: "Save project memory once per git commit. Every commit deserves a paired save; the body carries what git cannot reconstruct — the decision behind the change, any approach abandoned (use replan: prefix), the open question the commit raises. The body is never a paraphrase of the diff."
 ---
 
 # ContextGit — Context Commit Discipline
 
 ## When to save context
 
-Call \`project_memory_save\` at **session end**, always — a focused summary plus the
-3–5 genuinely open threads for the next session.
+Save once per commit. Every git commit deserves a paired \`project_memory_save\`.
+Skipping commits leaves their history blind — the diff survives, the *reason*
+does not. The save's body is what makes the commit binding worth pulling in
+three weeks.
 
-Call \`project_memory_save\` mid-session **only when project state changes in a way
-git does not capture**: a decision made, an approach abandoned, a thread opened or
-closed, scope changed (\`replan:\` prefix), an architectural choice.
+What the save body carries:
+- The **decision** behind the change — why this approach, not the other.
+- Any **approach abandoned** along the way (use \`replan:\` prefix if scope shifted).
+- The **open question** the commit raises — what is still unresolved.
 
-Do **not** save merely because a git commit happened. Git is the record of what
-changed. A context save that only paraphrases a commit message is noise.
+The body is NOT a restatement of the diff. Git already has the diff.
+
+Bad save: "Implemented apiFetch wrapper" — paraphrases the commit; git has it.
+
+Good save: "apiFetch wrapper — chose X-User-Id header over cookie auth because
+the extension can't share the host session cookie. Open: needs 401 handling."
 
 ## What makes a good commit message
 

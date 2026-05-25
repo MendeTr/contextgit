@@ -179,12 +179,45 @@ describe('patchClaudeSettings', () => {
 // ── save-rhythm content checks ────────────────────────────────────────────────
 
 describe('save-rhythm content', () => {
-  it('CLAUDE_MD_FRAGMENT does not contain "Every git commit"', () => {
-    expect(CLAUDE_MD_FRAGMENT).not.toContain('Every git commit')
+  it('CLAUDE_MD_FRAGMENT contains "Save once per commit" (commit-binding model)', () => {
+    expect(CLAUDE_MD_FRAGMENT).toContain('Save once per commit')
   })
 
   it('CONTEXT_COMMIT_SKILL description does not contain "Do not batch"', () => {
     expect(CONTEXT_COMMIT_SKILL).not.toContain('Do not batch')
+  })
+})
+
+// ── save-rhythm commit-binding model (03 DELTA Fix 3) ─────────────────────────
+
+describe('save-rhythm commit-binding model (03 DELTA Fix 3)', () => {
+  it('CLAUDE_MD_FRAGMENT states save-per-commit + body-carries-intent', () => {
+    expect(CLAUDE_MD_FRAGMENT).toContain('Save once per commit')
+    expect(CLAUDE_MD_FRAGMENT).toContain('Bad save:')
+    expect(CLAUDE_MD_FRAGMENT).toContain('Good save:')
+    expect(CLAUDE_MD_FRAGMENT).toContain('decision')
+    expect(CLAUDE_MD_FRAGMENT).toContain('open question')
+  })
+
+  it('CLAUDE_MD_FRAGMENT no longer contains the 02-rhythm text', () => {
+    expect(CLAUDE_MD_FRAGMENT).not.toContain('3–5 genuinely open threads')
+    expect(CLAUDE_MD_FRAGMENT).not.toContain('only when project state changes in a way')
+    expect(CLAUDE_MD_FRAGMENT).not.toContain('Do not save merely because a git commit happened')
+  })
+
+  it('CONTEXT_COMMIT_SKILL states save-per-commit + body-carries-intent', () => {
+    expect(CONTEXT_COMMIT_SKILL).toContain('Save once per commit')
+    expect(CONTEXT_COMMIT_SKILL).toContain('Bad save:')
+    expect(CONTEXT_COMMIT_SKILL).toContain('Good save:')
+  })
+
+  it('CONTEXT_COMMIT_SKILL description embodies commit-binding (not the 02 rhythm)', () => {
+    expect(CONTEXT_COMMIT_SKILL).toMatch(/description:\s*"[^"]*once per git commit/)
+    expect(CONTEXT_COMMIT_SKILL).not.toContain('Do not save merely because a git commit happened')
+  })
+
+  it('CONTEXT_COMMIT_SKILL no longer contains the 02-rhythm text', () => {
+    expect(CONTEXT_COMMIT_SKILL).not.toContain('3–5 genuinely open threads')
   })
 })
 
