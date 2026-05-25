@@ -252,8 +252,46 @@ export class LocalStore implements ContextStore {
         }
 
         if (input.threads?.close?.length) {
-          for (const { id, note } of input.threads.close) {
-            this.q.closeThread(id, commitId, note)
+          // Legacy direct-ID close path — archive with reason='manual'. closed_note
+          // from the legacy shape is currently dropped (no archive column for it,
+          // and no live caller depends on it).
+          for (const { id } of input.threads.close) {
+            this.q.archiveThread(id, 'manual', commitId)
+          }
+        }
+
+        // 03 DELTA: closesThreads — atomic resolve handle → subject → archive-handle.
+        // Whole save fails if any entry stays unresolved.
+        if (input.threads?.closes?.length) {
+          for (const raw of input.threads.closes) {
+            const candidate = raw.trim()
+            const handle = candidate.slice(0, 6)
+
+            // 1. Try as handle in open threads
+            const byHandle = this.q.findOpenThreadByHandle(branch.projectId, handle)
+            if (byHandle) {
+              this.q.archiveThread(byHandle.id, 'manual', commitId)
+              continue
+            }
+
+            // 2. Try as subject
+            const normalized = normalizeThreadSubject(candidate)
+            const bySubject = this.q.findOpenThreadByNormalizedDescription(branch.projectId, normalized)
+            if (bySubject) {
+              this.q.archiveThread(bySubject.id, 'manual', commitId)
+              continue
+            }
+
+            // 3. Already archived?
+            const inArchive = this.q.findArchivedThreadByHandle(branch.projectId, handle)
+            if (inArchive) {
+              continue // no-op success: agent's intent is already satisfied
+            }
+
+            // 4. Unresolved — abort the whole save.
+            throw new Error(
+              `closesThreads: no thread matched '${candidate}' (tried as handle, subject, and archive)`,
+            )
           }
         }
 
@@ -265,6 +303,9 @@ export class LocalStore implements ContextStore {
 
         // Auto-release this agent's claims on this branch (branch-scoped)
         this.q.releaseClaimsByAgent(input.agentId, input.branchId)
+
+        // 03 DELTA: sweep newly-decayed threads on every save.
+        this.q.sweepStaleThreads(branch.projectId, Date.now())
 
         return commit
       })()

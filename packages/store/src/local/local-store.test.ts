@@ -481,10 +481,13 @@ describe('LocalStore (in-memory)', () => {
         })
       }
 
+      // 03 DELTA: sweep runs on every createCommit. After 30+ noise commits, the
+      // thread is stale-distance and gets archived — it no longer appears in listOpenThreads.
       const after = await store.listOpenThreads(project.id)
-      expect(after).toHaveLength(1)
-      expect(after[0].stale).toBe(true)
-      expect(after[0].expired).toBeUndefined()
+      expect(after).toHaveLength(0)
+      const archived = await store.listArchivedThreads!(project.id)
+      expect(archived).toHaveLength(1)
+      expect(archived[0].archivedReason).toMatch(/stale/)
     } finally {
       vi.useRealTimers()
     }
@@ -531,11 +534,13 @@ describe('LocalStore (in-memory)', () => {
         })
       }
 
+      // 03 DELTA: sweep runs on every createCommit. After 15+ noise commits, the
+      // watch thread is watch-expired and gets archived — no longer in listOpenThreads.
       const after = await store.listOpenThreads(project.id)
-      expect(after).toHaveLength(1)
-      expect(after[0].kind).toBe('watch')
-      expect(after[0].expired).toBe(true)
-      expect(after[0].stale).toBeUndefined()
+      expect(after).toHaveLength(0)
+      const archived = await store.listArchivedThreads!(project.id)
+      expect(archived).toHaveLength(1)
+      expect(archived[0].archivedReason).toBe('watch-expired')
     } finally {
       vi.useRealTimers()
     }
@@ -607,8 +612,11 @@ describe('LocalStore (in-memory)', () => {
 
       const snapshot = await store.getSessionSnapshot(project.id, branch.id)
 
-      expect(snapshot.staleThreadCount).toBe(1)
-      expect(snapshot.expiredWatchCount).toBe(1)
+      // 03 DELTA: sweep runs on every createCommit. Stale + expired threads are
+      // archived before the snapshot is taken, so counts are 0 and only the live
+      // thread remains in openThreads.
+      expect(snapshot.staleThreadCount).toBe(0)
+      expect(snapshot.expiredWatchCount).toBe(0)
       expect(snapshot.openThreads).toHaveLength(1)
       expect(snapshot.openThreads[0].description).toBe('will stay live')
     } finally {
@@ -637,6 +645,96 @@ describe('LocalStore (in-memory)', () => {
     await store.restoreThread!(thread.id)
     const reopened = await store.listOpenThreads(project.id)
     expect(reopened.map((t) => t.id)).toContain(thread.id)
+  })
+
+  it('createCommit closesThreads — handle match archives the thread', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'open', content: 'x', summary: 'x',
+      commitType: 'manual',
+      threads: { open: ['close-me'] },
+    })
+    const open = await store.listOpenThreads(project.id)
+    const handle = open[0].id.slice(0, 6)
+
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'close', content: 'y', summary: 'y',
+      commitType: 'manual',
+      threads: { closes: [handle] },
+    })
+
+    const stillOpen = await store.listOpenThreads(project.id)
+    expect(stillOpen.length).toBe(0)
+    const archived = await store.listArchivedThreads!(project.id)
+    expect(archived.length).toBe(1)
+    expect(archived[0].archivedReason).toBe('manual')
+  })
+
+  it('createCommit closesThreads — subject match archives the thread', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'o', content: 'x', summary: 'x',
+      commitType: 'manual',
+      threads: { open: ['need to do the thing'] },
+    })
+
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'c', content: 'y', summary: 'y',
+      commitType: 'manual',
+      threads: { closes: ['Need to do the thing'] },
+    })
+
+    const archived = await store.listArchivedThreads!(project.id)
+    expect(archived.length).toBe(1)
+  })
+
+  it('createCommit closesThreads — already-archived handle is a no-op success', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    const c1 = await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'o', content: 'x', summary: 'x',
+      commitType: 'manual',
+      threads: { open: ['will-archive-twice'] },
+    })
+    const open = await store.listOpenThreads(project.id)
+    const handle = open[0].id.slice(0, 6)
+    await store.archiveThread!(open[0].id, 'manual', c1.id)
+
+    // Save uses the same handle; thread is already archived; save must NOT throw.
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'c', content: 'y', summary: 'y',
+      commitType: 'manual',
+      threads: { closes: [handle] },
+    })
+    // No second archive insert — list count remains 1.
+    const archived = await store.listArchivedThreads!(project.id)
+    expect(archived.length).toBe(1)
+  })
+
+  it('createCommit closesThreads — no match aborts the entire save atomically', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    const before = (await store.listCommits(branch.id, { limit: 100, offset: 0 })).length
+
+    await expect(
+      store.createCommit({
+        branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+        workflowType: 'interactive', message: 'c', content: 'y', summary: 'y',
+        commitType: 'manual',
+        threads: { closes: ['xxxxxx'] },
+      }),
+    ).rejects.toThrow(/closesThreads/)
+
+    const after = (await store.listCommits(branch.id, { limit: 100, offset: 0 })).length
+    expect(after).toBe(before)
   })
 
   it('opens distinct threads when normalized subjects differ', async () => {
