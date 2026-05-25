@@ -1,5 +1,7 @@
 import type { Database } from 'better-sqlite3'
 import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, SCHEMA_V7_DDL, SCHEMA_V8_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { classifyThread } from '@contextgit/core'
+import type { Thread } from '@contextgit/core'
 
 interface MigrationRow {
   version: number
@@ -107,10 +109,129 @@ const MIGRATIONS: Migration[] = [
       for (const sql of SCHEMA_V8_DDL) {
         db.exec(sql)
       }
-      // One-time sweep is added in Task 4 — this version creates the empty table only.
+      sweepStaleThreadsOnMigration(db, Date.now())
     },
   },
 ]
+
+/**
+ * One-time sweep run by migration v8: move every currently-stale or expired-watch
+ * thread from `threads` into `thread_archive`. Uses the same classification logic
+ * (`classifyThread` from core) the rest of the system uses.
+ *
+ * Exported so tests can drive the sweep against arbitrary seed data; in production
+ * it's called once, inside the v8 migration transaction, with `now = Date.now()`.
+ *
+ * Returns the number of threads moved.
+ */
+export function sweepStaleThreadsOnMigration(db: Database, now: number): number {
+  type ThreadRow = {
+    id: string
+    project_id: string
+    branch_id: string
+    description: string
+    status: string
+    kind: string
+    workflow_type: string | null
+    opened_in_commit: string
+    last_touched_commit: string | null
+    closed_in_commit: string | null
+    closed_note: string | null
+    created_at: number
+    updated_at: number | null
+  }
+
+  const rows = db.prepare(`SELECT * FROM threads WHERE status = 'open'`).all() as ThreadRow[]
+
+  const selectCommitTs = db.prepare(`SELECT created_at FROM commits WHERE id = ?`)
+  const countProjectCommitsSince = db.prepare(
+    `SELECT COUNT(*) AS n FROM commits c JOIN branches b ON c.branch_id = b.id WHERE b.project_id = ? AND c.created_at > ?`,
+  )
+  const countBranchCommitsSince = db.prepare(
+    `SELECT COUNT(*) AS n FROM commits WHERE branch_id = ? AND created_at > ?`,
+  )
+
+  const insertArchive = db.prepare(
+    `INSERT INTO thread_archive (
+       id, project_id, branch_id, description, status, kind, workflow_type,
+       opened_in_commit, last_touched_commit, closed_in_commit, closed_note,
+       created_at, updated_at, archived_at, archived_reason
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+  const deleteFromThreads = db.prepare(`DELETE FROM threads WHERE id = ?`)
+
+  let moved = 0
+  for (const row of rows) {
+    const thread: Thread = {
+      id: row.id,
+      projectId: row.project_id,
+      branchId: row.branch_id,
+      description: row.description,
+      status: row.status as Thread['status'],
+      kind: row.kind as Thread['kind'],
+      workflowType: (row.workflow_type ?? undefined) as Thread['workflowType'],
+      openedInCommit: row.opened_in_commit,
+      lastTouchedCommit: row.last_touched_commit ?? undefined,
+      closedInCommit: row.closed_in_commit ?? undefined,
+      closedNote: row.closed_note ?? undefined,
+      createdAt: new Date(row.created_at),
+      updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+    }
+
+    const touchId = thread.lastTouchedCommit ?? thread.openedInCommit
+    const tsRow = selectCommitTs.get(touchId) as { created_at: number } | undefined
+    const touchTs = tsRow?.created_at ?? thread.createdAt.getTime()
+    const projectN = (countProjectCommitsSince.get(thread.projectId, touchTs) as { n: number }).n
+    const branchN = (countBranchCommitsSince.get(thread.branchId, touchTs) as { n: number }).n
+
+    const flag = classifyThread(thread, {
+      touchTs,
+      projectCommitsSince: projectN,
+      branchCommitsSince: branchN,
+      now,
+    })
+
+    // classifyThread checks commit-distance only for 'open' threads. The spec also
+    // calls for a calendar-time fallback for inactive projects: threads untouched for
+    // ≥90 days are archived as stale-age even when commit counts are below thresholds.
+    const STALE_AGE_MS = 90 * 24 * 60 * 60 * 1000 // 90 days
+    const msSince = now - touchTs
+    const isAgeStale = thread.kind !== 'watch' && msSince >= STALE_AGE_MS
+
+    if (flag !== 'stale' && flag !== 'expired' && !isAgeStale) continue
+
+    const reason: 'stale-age' | 'stale-distance' | 'watch-expired' =
+      flag === 'expired'
+        ? 'watch-expired'
+        : // Age vs distance: if the commit-distance exceeds threshold use 'stale-distance',
+          // otherwise it must be age-based (including the calendar-time fallback).
+          branchN > 30 || projectN > 30
+          ? 'stale-distance'
+          : 'stale-age'
+
+    insertArchive.run(
+      row.id,
+      row.project_id,
+      row.branch_id,
+      row.description,
+      row.status,
+      row.kind,
+      row.workflow_type,
+      row.opened_in_commit,
+      row.last_touched_commit,
+      row.closed_in_commit,
+      row.closed_note,
+      row.created_at,
+      row.updated_at,
+      now,
+      reason,
+    )
+    deleteFromThreads.run(row.id)
+    moved++
+  }
+
+  return moved
+}
 
 export function runMigrations(db: Database): void {
   // Ensure migrations table exists
