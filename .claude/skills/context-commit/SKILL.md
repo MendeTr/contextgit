@@ -1,26 +1,21 @@
 ---
 name: context-commit
-description: "MANDATORY: Save project memory after completing ANY work. Use this skill after EVERY completed task and EVERY git commit — finished implementing a feature, resolved a bug, made a decision, closed a thread, completed a review, or ending a session. Every git commit must be followed immediately by a context commit. Do not wait to be asked. Do not proceed to the next task until both git commit and context commit are done. Triggers: git commit made, task complete, 'that's working', 'let's move on', 'I'm done', session ending. Skipping this means the next session starts completely blind."
+description: "Save project memory when project state changes in a way git does not capture: a key decision made, an approach abandoned, a thread opened or closed, scope changed (replan: prefix), or at session end. Do not save merely because a git commit happened — git is the record of what changed; a context save that only paraphrases a commit message is noise. Triggers: session ending, decision made, approach abandoned, thread opened or closed, scope changed, architectural choice."
 ---
 
 # ContextGit — Context Commit Discipline
 
-## RULE: Every git commit = immediate context commit
+## When to save context
 
-Do not wait to be asked. Do not batch. Do not skip.
-After every git commit, call `project_memory_save` immediately.
-Do not proceed to the next task until both git commit and context commit are done.
-These two always go together. Never git commit without a context commit.
+Call `project_memory_save` at **session end**, always — a focused summary plus the
+3–5 genuinely open threads for the next session.
 
-## When to commit context
+Call `project_memory_save` mid-session **only when project state changes in a way
+git does not capture**: a decision made, an approach abandoned, a thread opened or
+closed, scope changed (`replan:` prefix), an architectural choice.
 
-Call `project_memory_save` (MCP tool) after:
-- Every git commit (mandatory — these always go together)
-- Completing a feature or task (before moving to the next)
-- Making an architectural decision or choosing between options
-- Resolving a bug, blocker, or open question
-- Closing a thread
-- Before ending the session for any reason
+Do **not** save merely because a git commit happened. Git is the record of what
+changed. A context save that only paraphrases a commit message is noise.
 
 ## What makes a good commit message
 

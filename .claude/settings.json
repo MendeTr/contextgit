@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs sed -i '' 's/\"@contextgit\\\\/\\\\\\(core\\\\|store\\\\|api\\\\|mcp\\\\\\)\": \"0\\\\.1\\\\.9\"/\"@contextgit\\\\/\\\\1\": \"0.1.10\"/g')",
+      "Bash(node -e ' *)",
+      "Bash(cat ~/.claude/settings.json 2>/dev/null | python3 -m json.tool 2>/dev/null | grep -A 20 '\"hooks\"' | head -30)",
+      "Read(//Users/mendetrajovski/.claude/**)",
+      "Bash(cat ~/.claude.json 2>/dev/null | python3 -m json.tool 2>/dev/null | grep -A 20 '\"hooks\"' | head -30; cat ~/.claude/settings.local.json 2>/dev/null | python3 -m json.tool 2>/dev/null | grep -A 20 '\"hooks\"' | head -30)",
+      "Read(//Users/mendetrajovski/**)",
+      "Bash(grep -rn \"SessionSnapshot\\\\s*=\\\\|: SessionSnapshot\\\\s*=\\\\|return {\\\\s*$\" packages --include=\"*.ts\")",
+      "Bash(pnpm vitest *)",
+      "Bash(git fetch *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"MANDATORY: Call project_memory_load before doing any work. Do not read files, write code, or answer questions until you have called project_memory_load and read the snapshot.\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

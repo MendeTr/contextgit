@@ -87,7 +87,13 @@
       "Bash(python3 -m json.tool)",
       "Bash(find ~/.claude/plugins -name settings.json -o -name *.json)",
       "Bash(find ~/.claude -name *.local.md)",
-      "Bash(find ~/.claude/projects/-Users-mendetrajovski-contexthub -name *.json)"
+      "Bash(find ~/.claude/projects/-Users-mendetrajovski-contexthub -name *.json)",
+      "Bash(pnpm --filter @contextgit/core test)",
+      "Bash(pnpm --filter @contextgit/cli test)",
+      "Bash(pnpm --filter contextgit test -- src/lib/init-helpers.test.ts)",
+      "Bash(pnpm -r publish --access public)",
+      "Bash(pnpm -r publish --access public --no-git-checks)",
+      "Bash(npm view:*)"
     ]
   },
   "hooks": {
@@ -97,18 +103,6 @@
           {
             "type": "command",
             "command": "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"MANDATORY: Call project_memory_load before doing any work. Do not read files, write code, or answer questions until you have called project_memory_load and read the snapshot.\"}}'"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "if": "Bash(git commit*)",
-            "command": "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"MANDATORY: Call project_memory_save NOW before proceeding to any next task. Every git commit must be paired with project_memory_save immediately after.\"}}'"
           }
         ]
       }
