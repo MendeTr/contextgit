@@ -761,6 +761,27 @@ export class Queries {
   }
 
   /**
+   * Bulk restore: move every archived row matching one of the given reasons back
+   * to `threads`. Returns the number of rows moved. Used to recover from a wrong
+   * one-time-sweep (e.g. the 0.2.1 calibration bug that archived live threads on
+   * long-lived branches via the old OR-of-distance rule).
+   */
+  restoreAllArchivedByReason(projectId: string, reasons: ArchivedThread['archivedReason'][]): number {
+    if (reasons.length === 0) return 0
+    const rows = this.stmts.listArchivedByProject.all(projectId) as ThreadArchiveRow[]
+    const targets = rows.filter((r) => (reasons as string[]).includes(r.archived_reason))
+    if (targets.length === 0) return 0
+    const now = Date.now()
+    this.db.transaction(() => {
+      for (const r of targets) {
+        this.stmts.restoreFromArchive.run(now, r.id)
+        this.stmts.deleteFromArchive.run(r.id)
+      }
+    })()
+    return targets.length
+  }
+
+  /**
    * Find an open thread on this project whose normalized description matches.
    * Used by dedupe-on-save (02 DELTA spec §A) — open-thread count per project is
    * bounded by the decay system being built, so a JS-side scan is acceptable.

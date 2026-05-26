@@ -54,6 +54,7 @@ export interface ContextStore {
   findOpenThreadByHandle?(projectId: string, handle: string): Promise<Thread | undefined>
   findArchivedThreadByHandle?(projectId: string, handle: string): Promise<ArchivedThread | undefined>
   sweepStaleThreads?(projectId: string, now: number): Promise<{ archived: number; byReason: Record<'stale-age' | 'stale-distance' | 'watch-expired', number> }>
+  restoreAllArchivedByReason?(projectId: string, reasons: ArchivedThread['archivedReason'][]): Promise<number>
 
   // Trace tier (02 DELTA Step 5) — append-only, pull-only, NEVER auto-loaded.
   // Optional on the interface: legacy stores may not implement these yet.

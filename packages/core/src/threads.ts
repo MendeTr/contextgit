@@ -31,19 +31,26 @@ export function parseThreadOpenInput(input: ThreadOpenInput): { subject: string;
 // ─── Decay derivation (02 DELTA Step 3) ──────────────────────────────────────
 
 /**
- * Thresholds for thread decay. The two open-thread signals fire independently —
- * a thread is stale if EITHER triggers. Watch expiry fires on first signal.
+ * Thresholds for thread decay.
  *
- * "Sessions" in the spec are modeled here as:
- *   - branch commits since touch (per-branch activity)
- *   - project commits since touch (project-wide activity, the coarse session proxy)
- *   - calendar time since touch (the absolute-time fallback for inactive projects)
+ * Open threads use an AND-rule across two axes — recency (wall-clock time since
+ * touch) AND distance (commits since touch). A thread is stale only when BOTH
+ * signals fire. This is a calibration fix vs. 02 DELTA's original OR-of-distance:
+ * on a long-lived feature branch (e.g. JiraExtension, 200+ commits on one
+ * unmerged branch), raw commit-distance stales every thread older than 30
+ * branch commits regardless of when it was last touched — recency must be able
+ * to KEEP a thread alive, not just condemn it.
+ *
+ * Watch notes keep their OR-of-{branch-commits, time} expiry — they are
+ * explicitly TTL-bounded by design and don't suffer the long-branch problem
+ * (their thresholds are lower and their lifetime is meant to be short).
  */
 export const DECAY_DEFAULTS = {
-  staleOpenProjectCommits: 8,   // spec: 8 sessions, mapped to project-wide commits since touch
-  staleOpenBranchCommits: 30,   // spec: 30 commits behind HEAD on the current branch
-  expiredWatchBranchCommits: 15,// spec: 15 commits, whichever first
-  expiredWatchTimeMs: 3 * 24 * 60 * 60 * 1000, // spec: 3 sessions, mapped to 3 days
+  staleOpenAgeMs: 14 * 24 * 60 * 60 * 1000,   // 14 days untouched — recency primary signal
+  staleOpenProjectCommits: 8,                 // 8 project commits since touch (distance signal)
+  staleOpenBranchCommits: 30,                 // 30 branch commits since touch (distance signal)
+  expiredWatchBranchCommits: 15,              // 15 commits, whichever first
+  expiredWatchTimeMs: 3 * 24 * 60 * 60 * 1000,// 3 days, whichever first
 } as const
 
 export type DecayThresholds = typeof DECAY_DEFAULTS
@@ -78,9 +85,14 @@ export function classifyThread(
     return 'live'
   }
 
-  // 'open' or undefined (legacy) — treat as open
-  if (ctx.branchCommitsSince >= thresholds.staleOpenBranchCommits) return 'stale'
-  if (ctx.projectCommitsSince >= thresholds.staleOpenProjectCommits) return 'stale'
+  // 'open' or undefined (legacy) — AND-rule across recency AND distance.
+  // Distance alone never stales an open thread; recency must agree. Without this,
+  // long-lived feature branches stale every old thread regardless of touch time.
+  const ageStale = msSince >= thresholds.staleOpenAgeMs
+  const distanceStale =
+    ctx.branchCommitsSince >= thresholds.staleOpenBranchCommits ||
+    ctx.projectCommitsSince >= thresholds.staleOpenProjectCommits
+  if (ageStale && distanceStale) return 'stale'
   return 'live'
 }
 

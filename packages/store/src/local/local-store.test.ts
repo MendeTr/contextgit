@@ -436,7 +436,7 @@ describe('LocalStore (in-memory)', () => {
     expect(byDesc['speculative reminder'].kind).toBe('watch')
   })
 
-  it('flags an open thread as stale once enough branch commits accrue past its touch', async () => {
+  it('flags an open thread as stale only when BOTH age AND distance signals fire (03 DELTA recalibration)', async () => {
     vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
     try {
       const project = await store.createProject({ name: 'p' })
@@ -449,6 +449,7 @@ describe('LocalStore (in-memory)', () => {
         workflowType: 'interactive',
       })
 
+      // Open the thread at T0.
       await store.createCommit({
         branchId: branch.id,
         agentId: 'agent-1',
@@ -466,6 +467,8 @@ describe('LocalStore (in-memory)', () => {
       expect(before).toHaveLength(1)
       expect(before[0].stale).toBeUndefined()
 
+      // Distance signal alone: 31 noise commits, all within ~31 minutes. AND-rule
+      // says the thread must STAY LIVE — recency has not aged out yet.
       for (let i = 0; i < 31; i++) {
         tick()
         await store.createCommit({
@@ -481,8 +484,26 @@ describe('LocalStore (in-memory)', () => {
         })
       }
 
-      // 03 DELTA: sweep runs on every createCommit. After 30+ noise commits, the
-      // thread is stale-distance and gets archived — it no longer appears in listOpenThreads.
+      const stillLive = await store.listOpenThreads(project.id)
+      expect(stillLive).toHaveLength(1)
+      expect(stillLive[0].description).toBe('the stale-soon thread')
+
+      // Now jump the clock past the 14-day age threshold and trigger one more
+      // commit. Sweep-on-save now sees BOTH age (>14d since touch) AND distance
+      // (≥30 commits since touch) → thread is archived.
+      vi.setSystemTime(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000))
+      await store.createCommit({
+        branchId: branch.id,
+        agentId: 'agent-1',
+        agentRole: 'dev',
+        tool: 'claude-code',
+        workflowType: 'interactive',
+        message: 'final noise',
+        content: 'c',
+        summary: 's',
+        commitType: 'manual',
+      })
+
       const after = await store.listOpenThreads(project.id)
       expect(after).toHaveLength(0)
       const archived = await store.listArchivedThreads!(project.id)
@@ -579,7 +600,10 @@ describe('LocalStore (in-memory)', () => {
         },
       })
 
-      // Push enough noise to age out the first two but keep #3 live by touching it
+      // Push enough noise to drive up branch-distance, then jump the clock past
+      // the 14-day age threshold so AND-rule's age + distance signals BOTH fire
+      // on the stale-target threads. (Distance alone no longer ages anything out
+      // — 03 DELTA decay recalibration.)
       for (let i = 0; i < 31; i++) {
         tick()
         await store.createCommit({
@@ -594,6 +618,9 @@ describe('LocalStore (in-memory)', () => {
           commitType: 'manual',
         })
       }
+
+      // Advance past the age threshold so the AND-rule fires on the targeted threads.
+      vi.setSystemTime(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000))
 
       // Touch the live one on the most recent commit so it doesn't go stale
       tick()

@@ -425,6 +425,14 @@ export class LocalStore implements ContextStore {
     }
   }
 
+  restoreAllArchivedByReason(projectId: string, reasons: import('@contextgit/core').ArchivedThread['archivedReason'][]): Promise<number> {
+    try {
+      return Promise.resolve(this.q.restoreAllArchivedByReason(projectId, reasons))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
   // ─── Trace (fine tier — 02 DELTA Step 4/5) ───────────────────────────────
 
   appendTraceEntry(input: { projectId: string; branchId: string; note: string; gitCommitSha?: string }): Promise<TraceEntry> {

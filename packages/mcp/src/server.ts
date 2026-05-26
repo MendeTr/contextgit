@@ -660,19 +660,36 @@ Call after a context branch experiment succeeds and you want to preserve the fin
     close,
     close_subject,
     restore,
+    restore_all_stale,
   }: {
     filter?: 'stale' | 'expired-watch' | 'live' | 'all' | 'archived'
     close?: string
     close_subject?: string
     restore?: string
+    restore_all_stale?: boolean
   }) => {
     try {
       // Action flags (mutually exclusive — first match wins; multiple is an error)
-      const actions = [close, close_subject, restore].filter(Boolean).length
+      const actions = [close, close_subject, restore, restore_all_stale ? '1' : undefined].filter(Boolean).length
       if (actions > 1) {
         return {
-          content: [{ type: 'text' as const, text: 'Error: pass at most one of close, close_subject, restore.' }],
+          content: [{ type: 'text' as const, text: 'Error: pass at most one of close, close_subject, restore, restore_all_stale.' }],
           isError: true,
+        }
+      }
+
+      if (restore_all_stale) {
+        const count = await ctx.store.restoreAllArchivedByReason!(
+          ctx.projectId,
+          ['stale-age', 'stale-distance'],
+        )
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Restored ${count} thread(s) previously archived by decay (stale-age + stale-distance). ` +
+                  `Threads archived as 'manual' or 'watch-expired' were NOT touched. ` +
+                  `Run project_memory_threads filter='live' to verify the recovery.`,
+          }],
         }
       }
 
@@ -771,6 +788,9 @@ Call after a context branch experiment succeeds and you want to preserve the fin
     ),
     restore: z.string().optional().describe(
       'Restore an archived thread by 6-char handle. Moves it back to threads.',
+    ),
+    restore_all_stale: z.boolean().optional().describe(
+      'Bulk restore: move every thread previously archived as "stale-age" or "stale-distance" back to the open list. Use this to recover from a wrong decay sweep (e.g. the 0.2.1 calibration bug that staled live threads on long-lived branches). Does NOT touch threads archived as "manual" or "watch-expired".',
     ),
   }
 

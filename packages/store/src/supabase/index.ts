@@ -599,6 +599,9 @@ export class SupabaseStore implements ContextStore {
   sweepStaleThreads(): never {
     throw new Error('sweepStaleThreads: not implemented in 0.2.0 — LocalStore only')
   }
+  restoreAllArchivedByReason(): never {
+    throw new Error('restoreAllArchivedByReason: not implemented in 0.2.0 — LocalStore only')
+  }
 
   async getContextDelta(projectId: string, branchId: string, since: number): Promise<ContextDelta> {
     // Strictly greater than — matches LocalStore semantics (> datetime(since/1000, 'unixepoch'))

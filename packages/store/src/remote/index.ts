@@ -338,4 +338,7 @@ export class RemoteStore implements ContextStore {
   sweepStaleThreads(): never {
     throw new Error('sweepStaleThreads: not implemented in 0.2.0 — LocalStore only')
   }
+  restoreAllArchivedByReason(): never {
+    throw new Error('restoreAllArchivedByReason: not implemented in 0.2.0 — LocalStore only')
+  }
 }

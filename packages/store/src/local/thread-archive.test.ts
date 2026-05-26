@@ -29,12 +29,11 @@ describe('thread_archive table (v8 migration)', () => {
   })
 
   it('one-time sweep moves currently-stale threads to thread_archive on first v8 run', () => {
-    // Seed scenario: a thread touched at commit c0, then 35 newer commits on the
-    // same branch since touch. classifyThread sees branchCommitsSince = 35 >= 30,
-    // returns 'stale', and the migration sweep attributes the reason as
-    // 'stale-distance' (since branchN >= 30 in the helper's reason logic).
+    // 03 DELTA decay recalibration (AND-rule): a thread is stale only when
+    // BOTH age (>14 days since touch) AND distance (≥30 branch commits since
+    // touch) fire. Seed: thread touched 15 days ago + 35 newer commits.
     const now = Date.now()
-    const olderTouch = now - 60 * 60 * 1000 // 1 hour ago
+    const olderTouch = now - 15 * 24 * 60 * 60 * 1000 // 15 days ago — past 14d age threshold
 
     db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p1', 'proj', olderTouch)
     db.prepare(
@@ -178,11 +177,44 @@ describe('thread_archive table (v8 migration)', () => {
     expect(found?.archivedReason).toBe('manual')
   })
 
+  it('restoreAllArchivedByReason moves archived rows back to threads, filtered by reason', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p8', 'p8', now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b8', 'p8', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c8', 'b8', 'a1', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+
+    // Seed: three archived rows — two wrongly-archived-by-decay, one manual close.
+    q.insertThread('age-1', 's1', 'p8', 'b8', 'c8', 'interactive')
+    q.insertThread('dist-1', 's2', 'p8', 'b8', 'c8', 'interactive')
+    q.insertThread('manual-1', 's3', 'p8', 'b8', 'c8', 'interactive')
+    q.archiveThread('age-1', 'stale-age', 'c8')
+    q.archiveThread('dist-1', 'stale-distance', 'c8')
+    q.archiveThread('manual-1', 'manual', 'c8')
+
+    const restored = q.restoreAllArchivedByReason('p8', ['stale-age', 'stale-distance'])
+
+    expect(restored).toBe(2)
+
+    // age-1 + dist-1 are back in threads; manual-1 stays in archive.
+    const openIds = db.prepare(`SELECT id FROM threads WHERE project_id = 'p8'`).all().map((r: any) => r.id).sort()
+    expect(openIds).toEqual(['age-1', 'dist-1'])
+
+    const archivedIds = db.prepare(`SELECT id FROM thread_archive WHERE project_id = 'p8'`).all().map((r: any) => r.id)
+    expect(archivedIds).toEqual(['manual-1'])
+  })
+
   it('sweepStaleThreads archives currently-decayed threads and returns counts', async () => {
     const { Queries } = await import('./queries.js')
     const q = new Queries(db)
     const now = Date.now()
-    const olderTouch = now - 60 * 60 * 1000
+    // 03 DELTA decay recalibration: AND-rule needs BOTH age (>14d) and distance.
+    const olderTouch = now - 15 * 24 * 60 * 60 * 1000 // 15 days ago
 
     db.prepare(`INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)`).run('p7', 'p7', olderTouch)
     db.prepare(

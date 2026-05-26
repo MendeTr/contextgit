@@ -197,15 +197,29 @@ reminders are `watch`.
 ### Problem C — genuine threads still go stale
 
 A real open thread for a feature that already shipped is stale but should not be
-deleted. Two staleness signals, both ship with this spec:
+deleted. Two staleness signals; a thread is stale only when **BOTH** signals fire
+(AND, not OR — see Calibration Note below):
 
-1. **Age-based.** A thread untouched for N sessions (default 8) is flagged `stale`.
-2. **Commit-distance.** Add `lastTouchedCommit` to `Thread` and the `threads` table.
-   A thread more than N commits behind HEAD (default 30) is `stale`. Commit-distance
-   is the better signal for bursty solo work.
+1. **Age-based (primary, recency).** A thread untouched for `staleOpenAgeMs`
+   (default 14 days of wall-clock time) is flagged age-stale.
+2. **Commit-distance (secondary).** A thread more than `staleOpenBranchCommits`
+   (default 30) commits behind on its branch — or `staleOpenProjectCommits`
+   (default 8) project-wide — is flagged distance-stale.
+
+A thread is `stale` iff `age-stale AND distance-stale`. Recency keeps a thread
+alive even on very active branches.
 
 `stale` is a read-time derived flag, not stored. Stale `open` threads are excluded
-from the default load but retrievable via `project_memory_threads --stale`.
+from the default load but retrievable via `project_memory_threads filter='stale'`.
+
+**Calibration note (0.2.1 fix).** The first cut of this spec used OR — either
+signal stales a thread. That broke on long-lived feature branches (e.g.
+JiraExtension, 200+ commits on one unmerged branch): every thread older than
+30 commits became stale-by-distance regardless of when it was touched in
+wall-clock terms, and the migration sweep emptied the `threads` table. The
+AND-rule above is the fix: distance alone never condemns a thread; recency
+must agree. Recovery for affected installs:
+`project_memory_threads restore_all_stale=true`.
 
 ### Deferred — auto-close on reference (NOT this spec)
 

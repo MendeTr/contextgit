@@ -76,6 +76,18 @@ or pass `closes_threads: ['handle-or-subject', …]` on a save — the resolutio
 is atomic with the rest of the save (handle → subject → already-archived no-op
 → atomic error if still unresolved).
 
+**Decay calibration: AND, not OR.** The first cut of the decay rule stale'd a
+thread when EITHER recency OR commit-distance crossed threshold. On a
+long-lived feature branch with 200+ commits unmerged, that meant every thread
+older than 30 branch commits got archived regardless of when it was last
+touched in wall-clock terms — and the one-time migration sweep emptied the
+`threads` table. The new rule: **stale only when BOTH age AND distance fire**.
+Distance alone never condemns a thread; recency must agree. New default age
+threshold: 14 days of wall-clock inactivity (`staleOpenAgeMs`). Affected
+installs can recover via `project_memory_threads restore_all_stale=true`
+(restores rows archived as `stale-age` or `stale-distance`; leaves `manual`
+and `watch-expired` alone).
+
 **Save-rhythm rule corrected to commit-binding model.** 0.1.10 dropped the
 "save every git commit" rule in favor of "save ~3x per session." A usage audit
 disproved that — the save is bound to its commit, and that binding is the value.
