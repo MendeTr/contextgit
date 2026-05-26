@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, SCHEMA_V7_DDL, SCHEMA_V8_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, SCHEMA_V7_DDL, SCHEMA_V8_DDL, SCHEMA_V9_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
 import { classifyThread } from '@contextgit/core'
 import type { Thread } from '@contextgit/core'
 
@@ -110,6 +110,16 @@ const MIGRATIONS: Migration[] = [
         db.exec(sql)
       }
       sweepStaleThreadsOnMigration(db, Date.now())
+    },
+  },
+  {
+    version: 9,
+    name: 'plan_nodes',
+    run(db) {
+      for (const sql of SCHEMA_V9_DDL) {
+        db.exec(sql)
+      }
+      // No sweep. Planning is structurally exempt from staleness — it never decays.
     },
   },
 ]
