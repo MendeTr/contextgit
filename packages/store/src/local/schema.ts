@@ -222,3 +222,28 @@ export const SCHEMA_V8_DDL = [
   CREATE_THREAD_ARCHIVE,
   `CREATE INDEX IF NOT EXISTS idx_thread_archive_project ON thread_archive(project_id, archived_at DESC)`,
 ]
+
+// Migration v9 adds the plan_nodes table — three-level plan→step→task hierarchy.
+// One self-referential table; level + parent_id encodes the structure. Depth
+// is capped at 3 by the level enum. Plan nodes are structurally exempt from
+// the 03 thread-archive sweep — they live in their own table and never decay.
+export const CREATE_PLAN_NODES = `
+CREATE TABLE IF NOT EXISTS plan_nodes (
+  id              TEXT PRIMARY KEY,
+  project_id      TEXT NOT NULL REFERENCES projects(id),
+  parent_id       TEXT REFERENCES plan_nodes(id),
+  level           TEXT NOT NULL CHECK (level IN ('plan', 'step', 'task')),
+  title           TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'done')),
+  position        INTEGER NOT NULL,
+  git_commit_sha  TEXT,
+  created_at      INTEGER NOT NULL,
+  completed_at    INTEGER
+)
+`
+
+export const SCHEMA_V9_DDL = [
+  CREATE_PLAN_NODES,
+  `CREATE INDEX IF NOT EXISTS idx_plan_nodes_project ON plan_nodes(project_id, level, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_plan_nodes_parent  ON plan_nodes(parent_id)`,
+]
