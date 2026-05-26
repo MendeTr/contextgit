@@ -285,11 +285,13 @@ Skipping this call means you will duplicate work that was already done, re-explo
     content,
     open_threads,
     closes_threads,
+    completes_tasks,
   }: {
     message: string
     content: string
     open_threads?: string[]
     closes_threads?: string[]
+    completes_tasks?: string[]
   }) => {
     await autoSnapshot.onToolCall('context_commit')
     try {
@@ -303,6 +305,7 @@ Skipping this call means you will duplicate work that was already done, re-explo
         content,
         gitCommitSha: git?.sha,
         ...(Object.keys(threads).length > 0 ? { threads } : {}),
+        ...(completes_tasks?.length ? { completesTasks: completes_tasks } : {}),
       })
 
       // Generate/update CLAUDE.md in the project root
@@ -348,6 +351,9 @@ Skipping this call means you will duplicate work that was already done, re-explo
     ),
     closes_threads: z.array(z.string()).optional().describe(
       'Threads to close. Each entry can be a 6-char handle (from the load) or a thread subject (normalized match). Resolution is atomic — the whole save fails if any entry stays unresolved.',
+    ),
+    completes_tasks: z.array(z.string()).optional().describe(
+      'Plan tasks to mark done. Each entry can be a 6-char handle (from the ## Plan section) or an exact task title. Resolution is atomic — the whole save fails if any entry stays unresolved.',
     ),
   }
 
@@ -942,6 +948,154 @@ The trace tier holds step-level reasoning notes — dead ends, "tried X, abandon
 When project_memory_load returns a "(+N stale, +M expired-watch ...)" hint, this is the tool that shows them. Stale open threads can be triaged (close them, or touch them by saving with the same subject). Expired watch notes are auto-dropped — they only show up here for awareness.`,
     projectMemoryThreadsSchema,
     handleProjectMemoryThreads,
+  )
+
+  // ── project_memory_plan (04 DELTA) — create or update plan nodes ────────
+
+  function countNodes(node: import('@contextgit/core').PlanNode): { plans: number; steps: number; tasks: number } {
+    const acc = { plans: 0, steps: 0, tasks: 0 }
+    const walk = (n: import('@contextgit/core').PlanNode) => {
+      if (n.level === 'plan') acc.plans++
+      else if (n.level === 'step') acc.steps++
+      else acc.tasks++
+      for (const c of n.children ?? []) walk(c)
+    }
+    walk(node)
+    return acc
+  }
+
+  const planNodeInputSchema: z.ZodType<{ title: string; status?: 'pending' | 'in_progress' | 'done'; children?: unknown[] }> = z.lazy(() =>
+    z.object({
+      title: z.string().min(1),
+      status: z.enum(['pending', 'in_progress', 'done']).optional(),
+      children: z.array(planNodeInputSchema).optional(),
+    }),
+  )
+
+  const handleProjectMemoryPlan = async ({
+    create,
+    update,
+  }: {
+    create?: { title: string; status?: 'pending' | 'in_progress' | 'done'; children?: unknown[] }
+    update?: { handle: string; status?: 'pending' | 'in_progress' | 'done'; title?: string }
+  }) => {
+    try {
+      if (create && update) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: pass either `create` or `update`, not both.' }],
+          isError: true,
+        }
+      }
+      if (create) {
+        const plan = await ctx.store.insertPlanTree!(ctx.projectId, create as import('@contextgit/core').PlanNodeInput)
+        const counts = countNodes(plan)
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Created plan [${plan.id.slice(0, 6)}] '${plan.title}' (${counts.plans} plan, ${counts.steps} step(s), ${counts.tasks} task(s)).`,
+          }],
+        }
+      }
+      if (update) {
+        const handle = update.handle.slice(0, 6)
+        const node = await ctx.store.findPlanNodeByHandle!(ctx.projectId, handle)
+        if (!node) {
+          return {
+            content: [{ type: 'text' as const, text: `No plan node matched handle '${update.handle}'.` }],
+            isError: true,
+          }
+        }
+        if (update.status) await ctx.store.updatePlanNodeStatus!(node.id, update.status, null)
+        if (update.title) await ctx.store.updatePlanNodeTitle!(node.id, update.title)
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Updated plan node [${node.id.slice(0, 6)}]${update.status ? ` status=${update.status}` : ''}${update.title ? ` title='${update.title}'` : ''}.`,
+          }],
+        }
+      }
+      return {
+        content: [{ type: 'text' as const, text: 'Error: pass either `create` or `update`.' }],
+        isError: true,
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { content: [{ type: 'text' as const, text: `Error: ${msg}` }], isError: true }
+    }
+  }
+
+  const projectMemoryPlanSchema = {
+    create: planNodeInputSchema.optional().describe(
+      'Create a new plan tree. Pass a nested {title, children?: [{title, children?: [{title}]}]} structure. Depth ≤ 3 (plan → step → task). Each node defaults to status=pending.',
+    ),
+    update: z.object({
+      handle: z.string().min(1).describe('6-char handle of the node to update.'),
+      status: z.enum(['pending', 'in_progress', 'done']).optional(),
+      title: z.string().optional(),
+    }).optional().describe(
+      'Update an existing plan node by 6-char handle. Pass status to check it off (done) or title to rename.',
+    ),
+  }
+
+  server.tool(
+    'project_memory_plan',
+    `Create or update plan nodes. Planning is a three-level hierarchy: plan → step → task. Pass {create: {title, children: [...]}} to scaffold a tree in one call, or {update: {handle, status: 'done'}} to check a task off. Planning nodes never decay — they leave the active view only by being marked done (or all children done for plans/steps).`,
+    projectMemoryPlanSchema,
+    handleProjectMemoryPlan,
+  )
+
+  // ── project_memory_plans (04 DELTA) — read plan nodes ───────────────────
+
+  const handleProjectMemoryPlans = async ({
+    completed,
+    plan: planHandle,
+  }: {
+    completed?: boolean
+    plan?: string
+  }) => {
+    try {
+      if (completed) {
+        const done = await ctx.store.listCompletedPlans!(ctx.projectId)
+        if (done.length === 0) {
+          return { content: [{ type: 'text' as const, text: '(no completed plans)' }] }
+        }
+        const lines = done.map((p) => `[${p.id.slice(0, 6)}] ${p.title} (${p.progress?.done ?? 0}/${p.progress?.total ?? 0} done)`)
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+      }
+      if (planHandle) {
+        const node = await ctx.store.findPlanNodeByHandle!(ctx.projectId, planHandle.slice(0, 6))
+        if (!node) {
+          return { content: [{ type: 'text' as const, text: `No plan node matched handle '${planHandle}'.` }], isError: true }
+        }
+        const trees = await ctx.store.getPlanTree!(ctx.projectId)
+        const target = trees.find((t) => t.id === node.id)
+        if (!target) {
+          return { content: [{ type: 'text' as const, text: `Plan node ${planHandle} found but no active tree returned (already complete?).` }] }
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify(target, null, 2) }] }
+      }
+      const trees = await ctx.store.getPlanTree!(ctx.projectId)
+      if (trees.length === 0) {
+        return { content: [{ type: 'text' as const, text: '(no active plans)' }] }
+      }
+      const summary = trees.map((p) => `[${p.id.slice(0, 6)}] ${p.title} (${p.progress?.done ?? 0}/${p.progress?.total ?? 0} done)`)
+      return { content: [{ type: 'text' as const, text: summary.join('\n') }] }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { content: [{ type: 'text' as const, text: `Error: ${msg}` }], isError: true }
+    }
+  }
+
+  const projectMemoryPlansSchema = {
+    completed: z.boolean().optional().describe('List completed plans (the project delivery record) instead of active.'),
+    plan: z.string().optional().describe('Drill into a single plan by 6-char handle. Returns its full tree JSON.'),
+  }
+
+  server.tool(
+    'project_memory_plans',
+    `Read plan nodes. Default: returns active plans with progress. completed=true lists finished plans (delivery record). plan=<handle> drills into one plan's full tree.`,
+    projectMemoryPlansSchema,
+    handleProjectMemoryPlans,
   )
 
   return server

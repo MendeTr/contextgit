@@ -57,7 +57,9 @@ interface EngineCommitStoreInput {
   threads?: {
     open?: string[]
     close?: Array<{ id: string; note: string }>
+    closes?: string[]  // 03 DELTA
   }
+  completesTasks?: string[]  // 04 DELTA
 }
 
 interface EngineAgentInput {
@@ -80,7 +82,9 @@ export interface EngineCommitInput {
   threads?: {
     open?: string[]
     close?: Array<{ id: string; note: string }>
+    closes?: string[]  // 03 DELTA: handles or subjects (atomic close)
   }
+  completesTasks?: string[]  // 04 DELTA: plan-task handles or titles (atomic complete)
 }
 
 export interface EngineOptions {
@@ -153,6 +157,7 @@ export class ContextEngine {
       ciRunId:      input.ciRunId,
       pipelineName: input.pipelineName,
       threads:      input.threads,
+      completesTasks: input.completesTasks,
     })
 
     // Generate and index embedding asynchronously — never block the commit.
