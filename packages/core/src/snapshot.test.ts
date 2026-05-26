@@ -298,4 +298,70 @@ describe('SnapshotFormatter inline claim status', () => {
     expect(out).toContain('HEAD: abc12345')
     expect(out).toContain('7 commits')
   })
+
+  // ─── 04 DELTA: ## Plan section ───────────────────────────────────────────
+
+  it('agents-md renders ## Plan between ## Git and ## Open Threads when planTree is present', () => {
+    const snapshot = makeSnapshot({
+      headSha: 'a1b2c3d4',
+      commitCount: 10,
+      planTree: [
+        {
+          id: 'plan-1234567890', projectId: 'p', level: 'plan', title: 'Webapp foundation',
+          status: 'pending', position: 0, createdAt: new Date(),
+          progress: { done: 1, total: 3 },
+          children: [
+            {
+              id: 'step-1234567890', projectId: 'p', parentId: 'plan-1234567890', level: 'step',
+              title: 'Slice 1', status: 'done', position: 0, createdAt: new Date(),
+              progress: { done: 1, total: 1 },
+              children: [
+                { id: 'task-AA12345678', projectId: 'p', parentId: 'step-1234567890', level: 'task',
+                  title: 'StatusDot', status: 'done', position: 0, createdAt: new Date() },
+              ],
+            },
+            {
+              id: 'step-2234567890', projectId: 'p', parentId: 'plan-1234567890', level: 'step',
+              title: 'Slice 2', status: 'pending', position: 1, createdAt: new Date(),
+              progress: { done: 0, total: 2 },
+              children: [
+                { id: 'task-BB12345678', projectId: 'p', parentId: 'step-2234567890', level: 'task',
+                  title: 'ProgressBar', status: 'pending', position: 0, createdAt: new Date() },
+                { id: 'task-CC12345678', projectId: 'p', parentId: 'step-2234567890', level: 'task',
+                  title: 'AISuggestionCard', status: 'pending', position: 1, createdAt: new Date() },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const out = formatter.format(snapshot, 'agents-md')
+    expect(out).toContain('## Plan')
+    expect(out).toContain('Webapp foundation')
+    expect(out).toContain('[1/3 done]')
+    expect(out).toContain('✓ StatusDot')
+    expect(out).toContain('→ ProgressBar')
+    expect(out).toContain('← next')
+    expect(out).toContain('○ AISuggestionCard')
+    expect(out.indexOf('## Plan')).toBeLessThan(out.indexOf('## Open Threads'))
+    expect(out.indexOf('## Git')).toBeLessThan(out.indexOf('## Plan'))
+  })
+
+  it('agents-md omits ## Plan when planTree is empty or undefined', () => {
+    expect(formatter.format(makeSnapshot({ planTree: [] }), 'agents-md')).not.toContain('## Plan')
+    expect(formatter.format(makeSnapshot(), 'agents-md')).not.toContain('## Plan')
+  })
+
+  it('text format also renders === PLAN === when planTree is non-empty', () => {
+    const snapshot = makeSnapshot({
+      planTree: [{
+        id: 'planXYZ-rest', projectId: 'p', level: 'plan', title: 'Test plan',
+        status: 'pending', position: 0, createdAt: new Date(),
+        progress: { done: 0, total: 0 },
+      }],
+    })
+    const out = formatter.format(snapshot, 'text')
+    expect(out).toContain('=== PLAN ===')
+    expect(out).toContain('Test plan')
+  })
 })

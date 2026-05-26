@@ -1,7 +1,7 @@
 // SnapshotFormatter — converts a SessionSnapshot to one of the 3 output formats.
 // Moved from store/local/index.ts (inline) to core so all consumers share the same output.
 
-import type { Claim, SessionSnapshot, SnapshotFormat, Thread } from './types.js'
+import type { Claim, PlanNode, SessionSnapshot, SnapshotFormat, Thread } from './types.js'
 
 function claimLabel(thread: Thread, activeClaims: Claim[]): string {
   const match = activeClaims.find(
@@ -34,6 +34,58 @@ function gitFactsLine(branchName: string, headSha?: string, commitCount?: number
   if (headSha) parts.push(`HEAD: ${headSha.slice(0, 8)}`)
   if (commitCount != null) parts.push(`${commitCount} commits`)
   return parts.join(' | ')
+}
+
+/**
+ * Render the active plan tree as nested lines with status markers (04 DELTA).
+ *   ✓  done task
+ *   →  the single "next" pending task — first pending task in document order
+ *   ▸  in-progress (task) or partial (plan/step with done children)
+ *   ○  pending
+ * Plan and step nodes get a `[n/m done]` progress badge. Returns null when the tree is empty.
+ */
+function renderPlanTree(tree: PlanNode[]): string | null {
+  if (!tree || tree.length === 0) return null
+
+  // Find the single "next" pending task (depth-first document order)
+  let nextTaskId: string | null = null
+  const findNext = (nodes: PlanNode[]): boolean => {
+    for (const n of nodes) {
+      if (n.level === 'task' && n.status === 'pending') {
+        nextTaskId = n.id
+        return true
+      }
+      if (n.children && findNext(n.children)) return true
+    }
+    return false
+  }
+  findNext(tree)
+
+  const lines: string[] = []
+  const render = (node: PlanNode, depth: number) => {
+    const indent = '  '.repeat(depth)
+    let marker: string
+    if (node.level === 'task') {
+      if (node.status === 'done') marker = '✓'
+      else if (node.id === nextTaskId) marker = '→'
+      else if (node.status === 'in_progress') marker = '▸'
+      else marker = '○'
+    } else {
+      if (node.progress && node.progress.total > 0 && node.progress.done === node.progress.total) marker = '✓'
+      else if (node.progress && node.progress.done > 0) marker = '▸'
+      else if (node.status === 'in_progress') marker = '▸'
+      else marker = '○'
+    }
+    let line = `${indent}[${node.id.slice(0, 6)}] ${marker} ${node.title}`
+    if (node.level !== 'task' && node.progress && node.progress.total > 0) {
+      line += `  [${node.progress.done}/${node.progress.total} done]`
+    }
+    if (node.id === nextTaskId) line += '  ← next'
+    lines.push(line)
+    for (const c of node.children ?? []) render(c, depth + 1)
+  }
+  for (const top of tree) render(top, 0)
+  return lines.join('\n')
 }
 
 export class SnapshotFormatter {
@@ -76,6 +128,8 @@ export class SnapshotFormatter {
         : '(none)'
       const sections: string[] = []
       if (factsLine) sections.push(`## Git`, factsLine, ``)
+      const planRendered = renderPlanTree(snapshot.planTree ?? [])
+      if (planRendered) sections.push(`## Plan`, planRendered, ``)
       sections.push(`## Open Threads`, threadsSection)
       sections.push(``, `## Recent Activity`, commits || '(no commits yet)')
       sections.push(``, `## Active Claims`, claimsSection)
@@ -106,6 +160,8 @@ export class SnapshotFormatter {
       : '(none)'
     const textSections: string[] = []
     if (factsLine) textSections.push(`=== GIT ===`, factsLine, ``)
+    const planRenderedText = renderPlanTree(snapshot.planTree ?? [])
+    if (planRenderedText) textSections.push(`=== PLAN ===`, planRenderedText, ``)
     textSections.push(`=== CURRENT BRANCH: ${branchName} ===`, branchSummary || '(no branch summary yet)')
     textSections.push(``, `=== RECENT COMMITS ===`, commits || '(none)')
     textSections.push(``, `=== OPEN THREADS ===`, threadsSectionText)
