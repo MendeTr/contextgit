@@ -65,21 +65,40 @@ describe('plan_nodes table (v9 migration)', () => {
     expect(rows.every((r) => r.status === 'pending')).toBe(true)
   })
 
-  it('insertPlanTree rejects depth > 2 (max 3 levels)', async () => {
+  it('insertPlanTree accepts arbitrary depth (no level-enum cap)', async () => {
     const { Queries } = await import('./queries.js')
     const q = new Queries(db)
     db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p2', 'p2', 0)`).run()
-    expect(() =>
-      q.insertPlanTree('p2', {
-        title: 'too-deep',
-        children: [{ title: 'step', children: [{ title: 'task', children: [{ title: 'illegal' }] }] }],
-      }),
-    ).toThrow(/depth/i)
+
+    // 4 levels deep: root → child → grandchild → great-grandchild. Real project
+    // trees commonly exceed plan→step→task (e.g. Phase → sub-phase → Slice → Task).
+    const plan = q.insertPlanTree('p2', {
+      title: 'Phase 1',
+      children: [{
+        title: 'Sub-phase 1D-α',
+        children: [{
+          title: 'Slice 3',
+          children: [
+            { title: 'StatusDot' },
+            { title: 'Checkbox' },
+          ],
+        }],
+      }],
+    })
+
+    expect(plan.children?.[0].children?.[0].children).toHaveLength(2)
+    expect(plan.children?.[0].children?.[0].children?.[0].title).toBe('StatusDot')
+    // Depth 3+ nodes get level='task' (the 'level' enum is purely cosmetic for
+    // depths ≥ 2 after removing the cap).
+    expect(plan.children?.[0].children?.[0].children?.[0].level).toBe('task')
+
+    const rows = db.prepare(`SELECT id, level FROM plan_nodes WHERE project_id = 'p2'`).all() as { id: string; level: string }[]
+    expect(rows).toHaveLength(5) // 1 + 1 + 1 + 2
   })
 
   // ─── Task 5: getPlanTree ──────────────────────────────────────────────────
 
-  it('getPlanTree returns active plans with children and derived progress', async () => {
+  it('getPlanTree returns active plans with direct-child progress semantics', async () => {
     const { Queries } = await import('./queries.js')
     const q = new Queries(db)
     db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p3', 'p3', 0)`).run()
@@ -96,9 +115,81 @@ describe('plan_nodes table (v9 migration)', () => {
     const trees = q.getPlanTree('p3')
     expect(trees).toHaveLength(1)
     expect(trees[0].title).toBe('P')
-    expect(trees[0].progress).toEqual({ done: 1, total: 3 })
+    // P has 2 direct children (S1, S2). Neither is effectively-done yet
+    // (S1 has 1 of 2 done; S2 has 0 of 1).
+    expect(trees[0].progress).toEqual({ done: 0, total: 2 })
+    // S1 has 2 direct children, 1 done.
     expect(trees[0].children?.[0].progress).toEqual({ done: 1, total: 2 })
+    // S2 has 1 direct child, 0 done.
     expect(trees[0].children?.[1].progress).toEqual({ done: 0, total: 1 })
+  })
+
+  it('getPlanTree progress is depth-agnostic — rollup is correct at any depth', async () => {
+    // Reproduces the user's bug: Phase 1 with 9 children (8 placeholders + 1
+    // sub-phase with 6 leaf tasks, 3 done) must show [0/9 done], NOT [3/6].
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_deep', 'p_deep', 0)`).run()
+
+    const plan = q.insertPlanTree('p_deep', {
+      title: 'Phase 1',
+      children: [
+        // The one populated sub-phase: 6 leaf tasks, mark 3 done after insert.
+        { title: 'Sub-phase 1D-α', children: [
+          { title: 'Task 1' },
+          { title: 'Task 2' },
+          { title: 'Task 3' },
+          { title: 'Task 4' },
+          { title: 'Task 5' },
+          { title: 'Task 6' },
+        ]},
+        // 8 empty placeholder sub-phases.
+        { title: 'Sub-phase 1B' },
+        { title: 'Sub-phase 1C' },
+        { title: 'Sub-phase 1D-β' },
+        { title: 'Sub-phase 1D-γ' },
+        { title: 'Sub-phase 1D-δ' },
+        { title: 'Sub-phase 1D-SSO' },
+        { title: 'Sub-phase 1E' },
+        { title: 'Sub-phase 1F' },
+      ],
+    })
+
+    // Mark 3 of the 6 leaf tasks done.
+    const subPhase = plan.children![0]
+    for (let i = 0; i < 3; i++) {
+      q.updatePlanNodeStatus(subPhase.children![i].id, 'done', null)
+    }
+
+    const trees = q.getPlanTree('p_deep')
+    const phase1 = trees[0]
+    // Phase 1 has 9 direct children. None is effectively-done (sub-phase 1D-α
+    // is only 3/6, placeholders have no children + status=pending).
+    expect(phase1.progress).toEqual({ done: 0, total: 9 })
+    // Sub-phase 1D-α has 6 direct children, 3 done.
+    expect(phase1.children![0].progress).toEqual({ done: 3, total: 6 })
+    // Placeholder sub-phases have no children — no progress badge (undefined).
+    expect(phase1.children![1].progress).toBeUndefined()
+  })
+
+  it('getPlanTree: a non-leaf is effectively-done when all descendants are done (propagates up)', async () => {
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_prop', 'p_prop', 0)`).run()
+    const plan = q.insertPlanTree('p_prop', {
+      title: 'P',
+      children: [
+        { title: 'S1', children: [{ title: 'T1' }, { title: 'T2' }] },
+        { title: 'S2', children: [{ title: 'T3' }] },
+      ],
+    })
+    // Mark all leaf tasks done. P should be effectively-done and excluded from
+    // the active tree (goes to listCompletedPlans).
+    for (const s of plan.children!) {
+      for (const t of s.children!) q.updatePlanNodeStatus(t.id, 'done', null)
+    }
+    expect(q.getPlanTree('p_prop')).toHaveLength(0)
+    expect(q.listCompletedPlans('p_prop')).toHaveLength(1)
   })
 
   it('getPlanTree excludes plans where every leaf task is done', async () => {

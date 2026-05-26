@@ -1216,13 +1216,20 @@ export class Queries {
   // ─── plan_nodes (04 DELTA) ────────────────────────────────────────────────
 
   /**
-   * Insert a full plan→step→task tree atomically. Depth is capped at 3 — input
-   * root is level='plan', its children are 'step', their children are 'task'.
-   * Anything deeper throws.
+   * Insert a plan tree of arbitrary depth atomically. The `level` enum
+   * (plan|step|task) is purely cosmetic — depth 0 = 'plan', depth 1 = 'step',
+   * depth ≥ 2 = 'task'. Hierarchy is determined by parent_id alone; depth is
+   * unbounded. (The original 04 DELTA 3-level cap was wrong: real project
+   * trees commonly exceed plan→step→task, e.g. Phase → sub-phase → Slice → Task.)
    */
   insertPlanTree(projectId: string, input: PlanNodeInput): PlanNode {
-    const levels: PlanNodeLevel[] = ['plan', 'step', 'task']
     const now = Date.now()
+
+    const levelForDepth = (depth: number): PlanNodeLevel => {
+      if (depth === 0) return 'plan'
+      if (depth === 1) return 'step'
+      return 'task'
+    }
 
     const insertRecursive = (
       node: PlanNodeInput,
@@ -1230,11 +1237,8 @@ export class Queries {
       depth: number,
       position: number,
     ): PlanNode => {
-      if (depth >= 3) {
-        throw new Error(`insertPlanTree: depth exceeds 3 levels (plan→step→task) at title '${node.title}'`)
-      }
       const id = nanoid()
-      const level = levels[depth]
+      const level = levelForDepth(depth)
       this.stmts.insertPlanNode.run({
         id,
         project_id: projectId,
@@ -1258,23 +1262,29 @@ export class Queries {
 
   /**
    * Read the active plan tree for a project. Top-level plans with full child
-   * trees and derived `progress = { done, total }` from leaf tasks. Plans where
-   * every leaf is done are excluded — they belong in listCompletedPlans.
+   * trees and derived `progress = { done, total }` per node — DIRECT-CHILD
+   * semantics: progress.total = number of direct children; progress.done =
+   * number of direct children that are effectively-done. Effectively-done
+   * propagates recursively: a node is effectively-done if (it has no children
+   * AND status='done') OR (it has children AND every child is effectively-done).
+   *
+   * Plans that are effectively-done are excluded from the active view — they
+   * belong in listCompletedPlans.
    */
   getPlanTree(projectId: string): PlanNode[] {
-    return this.buildPlanTrees(projectId, (n) => !(n.progress && n.progress.total > 0 && n.progress.done === n.progress.total))
+    return this.buildPlanTrees(projectId, (_n, isDone) => !isDone)
   }
 
   /**
-   * List plans (parent_id IS NULL) whose every leaf task is done. The completed
+   * List plans (parent_id IS NULL) that are effectively-done. The completed
    * delivery record — kept indefinitely, never archived.
    */
   listCompletedPlans(projectId: string): PlanNode[] {
-    return this.buildPlanTrees(projectId, (n) => !!(n.progress && n.progress.total > 0 && n.progress.done === n.progress.total))
+    return this.buildPlanTrees(projectId, (_n, isDone) => isDone)
   }
 
   /** Shared tree builder for getPlanTree / listCompletedPlans. */
-  private buildPlanTrees(projectId: string, includeTop: (top: PlanNode) => boolean): PlanNode[] {
+  private buildPlanTrees(projectId: string, includeTop: (top: PlanNode, isEffectivelyDone: boolean) => boolean): PlanNode[] {
     const rows = this.stmts.listPlanNodesByProject.all(projectId) as PlanNodeRow[]
     const byId = new Map<string, PlanNode>()
     const childrenByParent = new Map<string, PlanNode[]>()
@@ -1293,23 +1303,29 @@ export class Queries {
         node.children = kids
       }
     }
-    const countLeaves = (node: PlanNode): { done: number; total: number } => {
-      if (node.level === 'task') return { done: node.status === 'done' ? 1 : 0, total: 1 }
-      let done = 0
-      let total = 0
-      for (const c of node.children ?? []) {
-        const sub = countLeaves(c)
-        done += sub.done
-        total += sub.total
+
+    // Walk the subtree. For each non-leaf, set progress = {done: direct
+    // children that are effectively-done, total: direct children count}.
+    // Returns whether this node itself is effectively-done.
+    // Depth-agnostic: works correctly at any nesting level.
+    const walkAndSetProgress = (node: PlanNode): boolean => {
+      if (!node.children || node.children.length === 0) {
+        // Leaf: effectively-done iff status === 'done'.
+        return node.status === 'done'
       }
-      node.progress = { done, total }
-      return { done, total }
+      let doneCount = 0
+      for (const c of node.children) {
+        if (walkAndSetProgress(c)) doneCount++
+      }
+      node.progress = { done: doneCount, total: node.children.length }
+      return doneCount === node.children.length
     }
+
     const tops: PlanNode[] = []
     for (const node of byId.values()) {
       if (!node.parentId) {
-        countLeaves(node)
-        if (includeTop(node)) tops.push(node)
+        const isDone = walkAndSetProgress(node)
+        if (includeTop(node, isDone)) tops.push(node)
       }
     }
     tops.sort((a, b) => a.position - b.position)
