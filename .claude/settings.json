@@ -11,7 +11,13 @@
       "Bash(pnpm vitest *)",
       "Bash(git fetch *)",
       "Bash(pnpm --filter @contextgit/store test)",
-      "Bash(node -e \"const {createRequire} = require\\('module'\\); const r = createRequire\\(import.meta.url\\);\")"
+      "Bash(node -e \"const {createRequire} = require\\('module'\\); const r = createRequire\\(import.meta.url\\);\")",
+      "Bash(test -f ~/.contextgit/projects/UYbAw1vtzKLYAvkUaB8sZ.db && echo \"DB exists\" && cp ~/.contextgit/projects/UYbAw1vtzKLYAvkUaB8sZ.db ~/.contextgit/projects/UYbAw1vtzKLYAvkUaB8sZ.before-decay-fix.bak && echo \"Backup created\")",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(grep -n \"^}$\\\\|^export async function setupMcp\\\\|return { server\\\\|return server\" /Users/mendetrajovski/contexthub/packages/mcp/src/server.ts)"
+    ],
+    "additionalDirectories": [
+      "/Users/mendetrajovski/.contextgit/projects"
     ]
   },
   "hooks": {
