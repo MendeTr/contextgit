@@ -120,6 +120,47 @@ export interface ArchivedThread extends Thread {
   archivedReason: ArchivedReason
 }
 
+// ============================================
+// Planning hierarchy (04 DELTA)
+// ============================================
+
+export type PlanNodeLevel = 'plan' | 'step' | 'task'
+export type PlanNodeStatus = 'pending' | 'in_progress' | 'done'
+
+export interface PlanNode {
+  id: string
+  projectId: string
+  parentId?: string
+  level: PlanNodeLevel
+  title: string
+  status: PlanNodeStatus
+  position: number
+  gitCommitSha?: string
+  createdAt: Date
+  completedAt?: Date
+  // Derived at read time, only present on plan/step nodes after getPlanTree:
+  progress?: { done: number; total: number }
+  children?: PlanNode[]
+}
+
+/**
+ * Nested input for creating a plan tree in one call.
+ * Depth determines level: input root = 'plan', children = 'step', grandchildren = 'task'.
+ * Deeper than 2 throws.
+ */
+export interface PlanNodeInput {
+  title: string
+  status?: PlanNodeStatus  // defaults to 'pending'
+  children?: PlanNodeInput[]
+}
+
+/** Update payload for a single existing node, identified by 6-char handle. */
+export interface PlanNodeUpdate {
+  handle: string
+  status?: PlanNodeStatus
+  title?: string
+}
+
 export interface TraceEntry {
   id: string
   projectId: string
@@ -196,6 +237,7 @@ export interface CommitInput {
     close?: Array<{ id: string; note: string }>     // legacy: direct-ID close, still works
     closes?: string[]                                // 03 DELTA: handles or subjects (atomic close)
   }
+  completesTasks?: string[]   // 04 DELTA: handles or titles, atomic resolution
 }
 
 /**
@@ -247,6 +289,7 @@ export interface SessionSnapshot {
   expiredWatchCount?: number   // watch notes filtered out by TTL
   headSha?: string             // populated live from git at load time
   commitCount?: number         // populated live from git at load time
+  planTree?: PlanNode[]        // 04 DELTA: active (non-fully-done) plans with derived progress
 }
 
 export interface ContextDelta {
