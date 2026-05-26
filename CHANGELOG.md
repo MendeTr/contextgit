@@ -55,11 +55,12 @@ Plain string still works — coerced to `{subject, kind:'open'}`. Watch notes dr
 
 ### Migrations
 
-Three automatic SQLite migrations apply on first use (`v6`, `v7`, `v8`). No manual step required.
+Four automatic SQLite migrations apply on first use (`v6`, `v7`, `v8`, `v9`). No manual step required.
 
 - `v6` — `threads.kind` (default `'open'`) + `threads.last_touched_commit`
 - `v7` — new `trace` table with indexes for windowed retrieval
 - `v8` — new `thread_archive` table + one-time sweep of currently-stale threads
+- `v9` — new `plan_nodes` table (planning hierarchy)
 
 ### Thread lifecycle and close ergonomics
 
@@ -75,6 +76,22 @@ output now carries a short 6-char handle. Close by handle, close by subject,
 or pass `closes_threads: ['handle-or-subject', …]` on a save — the resolution
 is atomic with the rest of the save (handle → subject → already-archived no-op
 → atomic error if still unresolved).
+
+**Planning hierarchy.** ContextGit was conflating two different things in one
+`threads` table: unresolved questions (which legitimately decay) and intended
+work (which must never decay — it is either done or pending). A real incident
+exposed this when the decay sweep archived planned next-steps. The fix: a new
+`plan_nodes` table that holds a three-level plan→step→task hierarchy. Plan
+nodes are structurally exempt from the decay sweep — they leave the active
+view only by being marked `done`, never by aging out. The snapshot grows a
+`## Plan` section between `## Git` and `## Open Threads`, with `→ next`
+marking the first pending task — the single most useful line for any session
+start. Two new tools: `project_memory_plan` (create or update a plan node)
+and `project_memory_plans` (read, with `completed=true` and `plan=<handle>`
+drill-in). `project_memory_save` gains `completes_tasks: ['handle-or-title',
+…]` so a session-end save can check off its finished tasks in the same call,
+atomically. Existing threads stay where they are; nothing migrates
+automatically — rewrite a thread as a plan only when you mean to.
 
 **Decay calibration: AND, not OR.** The first cut of the decay rule stale'd a
 thread when EITHER recency OR commit-distance crossed threshold. On a
