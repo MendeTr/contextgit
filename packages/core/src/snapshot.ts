@@ -38,11 +38,17 @@ function gitFactsLine(branchName: string, headSha?: string, commitCount?: number
 
 /**
  * Render the active plan tree as nested lines with status markers (04 DELTA).
- *   ✓  done task
+ *   ✓  complete (task with status='done', or container with all children complete)
  *   →  the single "next" pending task — first pending task in document order
- *   ▸  in-progress (task) or partial (plan/step with done children)
- *   ○  pending
- * Plan and step nodes get a `[n/m done]` progress badge. Returns null when the tree is empty.
+ *   ▸  in-progress (task) or partial (container with some children complete)
+ *   ○  not started / empty container / pending
+ *
+ * The marker uses the same `isComplete` rule that drives the [n/m done]
+ * rollup — display and rollup are derived from one definition. Containers
+ * (plan/step) need children to be complete; status='done' alone on an empty
+ * container doesn't make it ✓ (matches queries.ts walkAndSetProgress).
+ *
+ * Returns null when the tree is empty.
  */
 function renderPlanTree(tree: PlanNode[]): string | null {
   if (!tree || tree.length === 0) return null
@@ -61,6 +67,14 @@ function renderPlanTree(tree: PlanNode[]): string | null {
   }
   findNext(tree)
 
+  // Mirror of queries.ts walkAndSetProgress — single source of truth for what
+  // "complete" means at any depth. Used here so the marker matches the rollup.
+  const isComplete = (n: PlanNode): boolean => {
+    if (n.level === 'task') return n.status === 'done'
+    if (!n.children || n.children.length === 0) return false
+    return n.children.every(isComplete)
+  }
+
   const lines: string[] = []
   const render = (node: PlanNode, depth: number) => {
     const indent = '  '.repeat(depth)
@@ -71,7 +85,7 @@ function renderPlanTree(tree: PlanNode[]): string | null {
       else if (node.status === 'in_progress') marker = '▸'
       else marker = '○'
     } else {
-      if (node.progress && node.progress.total > 0 && node.progress.done === node.progress.total) marker = '✓'
+      if (isComplete(node)) marker = '✓'
       else if (node.progress && node.progress.done > 0) marker = '▸'
       else if (node.status === 'in_progress') marker = '▸'
       else marker = '○'

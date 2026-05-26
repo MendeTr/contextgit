@@ -172,6 +172,62 @@ describe('plan_nodes table (v9 migration)', () => {
     expect(phase1.children![1].progress).toBeUndefined()
   })
 
+  it('getPlanTree: status=done on an empty step does NOT count as complete (containers need children)', async () => {
+    // Reproduces the second user bug report (after the depth-cap fix):
+    //   Phase 1 [3/9] but no direct child shows ✓ → the "3" matches no rule.
+    // Cause: 3 of Phase 1's children are level='step' with status='done' and
+    // zero children. The previous fix counted them as "leaf-complete" because
+    // they had no children. The right rule: a 'step' or 'plan' is only complete
+    // when it has children AND all children complete. status='done' on an empty
+    // container is meaningless for the rollup.
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_empty_step', 'p_empty_step', 0)`).run()
+
+    const plan = q.insertPlanTree('p_empty_step', {
+      title: 'Phase 1',
+      children: [
+        // The active sub-phase with 6 tasks, 4 done (matches user's 1D-α [4/6]).
+        { title: 'Sub-phase 1D-α', children: [
+          { title: 'T1' }, { title: 'T2' }, { title: 'T3' },
+          { title: 'T4' }, { title: 'T5' }, { title: 'T6' },
+        ]},
+        // 3 placeholder steps that the user later marks status='done' directly
+        // (matches user's 1A/1B/1C). These must NOT count as complete.
+        { title: '1A' }, { title: '1B' }, { title: '1C' },
+        // 5 pending placeholder steps.
+        { title: '1D-β' }, { title: '1D-γ' }, { title: '1D-δ' },
+        { title: '1D-SSO' }, { title: '1E' },
+      ],
+    })
+
+    // Note: under the new content-aware level mapping, empty inserts get
+    // level='task'. But the bug specifically targets nodes stored as level='step'
+    // with no children (as in the user's actual data). Force level='step' on the
+    // 3 placeholders we want to mark "done" so the regression covers the real case.
+    db.prepare(`UPDATE plan_nodes SET level = 'step' WHERE project_id = 'p_empty_step' AND title IN ('1A', '1B', '1C')`).run()
+
+    // Mark 4 of 1D-α's 6 tasks done (4/6 — matches user's number).
+    for (let i = 0; i < 4; i++) {
+      q.updatePlanNodeStatus(plan.children![0].children![i].id, 'done', null)
+    }
+    // Mark 1A, 1B, 1C steps as status='done' directly (the user's case).
+    for (let i = 1; i <= 3; i++) {
+      q.updatePlanNodeStatus(plan.children![i].id, 'done', null)
+    }
+
+    const trees = q.getPlanTree('p_empty_step')
+    const phase1 = trees[0]
+
+    // No direct child of Phase 1 is complete:
+    //   - 1D-α: container with 4/6 children done → not all → incomplete
+    //   - 1A/1B/1C: containers (level='step') with no children → incomplete
+    //   - 5 pending placeholders: leaves or empty containers → incomplete
+    expect(phase1.progress).toEqual({ done: 0, total: 9 })
+    // Sub-phase 1D-α still correctly rolls up its own tasks.
+    expect(phase1.children![0].progress).toEqual({ done: 4, total: 6 })
+  })
+
   it('getPlanTree: a non-leaf is effectively-done when all descendants are done (propagates up)', async () => {
     const { Queries } = await import('./queries.js')
     const q = new Queries(db)

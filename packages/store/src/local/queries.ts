@@ -1216,29 +1216,33 @@ export class Queries {
   // ─── plan_nodes (04 DELTA) ────────────────────────────────────────────────
 
   /**
-   * Insert a plan tree of arbitrary depth atomically. The `level` enum
-   * (plan|step|task) is purely cosmetic — depth 0 = 'plan', depth 1 = 'step',
-   * depth ≥ 2 = 'task'. Hierarchy is determined by parent_id alone; depth is
-   * unbounded. (The original 04 DELTA 3-level cap was wrong: real project
-   * trees commonly exceed plan→step→task, e.g. Phase → sub-phase → Slice → Task.)
+   * Insert a plan tree of arbitrary depth atomically. `level` is semantic:
+   *   - root (parent_id IS NULL) → 'plan'
+   *   - has children at insert time → 'step' (container)
+   *   - no children at insert time → 'task' (leaf)
+   *
+   * Hierarchy is determined by parent_id, not by depth. The depth-based
+   * mapping from earlier 04 DELTA versions was wrong on trees deeper than 3
+   * (Slice at depth 2 would get labeled 'task' but actually had children).
+   * Content-based labeling is correct at any depth.
    */
   insertPlanTree(projectId: string, input: PlanNodeInput): PlanNode {
     const now = Date.now()
 
-    const levelForDepth = (depth: number): PlanNodeLevel => {
-      if (depth === 0) return 'plan'
-      if (depth === 1) return 'step'
-      return 'task'
+    const levelFor = (isRoot: boolean, hasChildren: boolean): PlanNodeLevel => {
+      if (isRoot) return 'plan'
+      return hasChildren ? 'step' : 'task'
     }
 
     const insertRecursive = (
       node: PlanNodeInput,
       parentId: string | null,
-      depth: number,
       position: number,
     ): PlanNode => {
       const id = nanoid()
-      const level = levelForDepth(depth)
+      const isRoot = parentId === null
+      const hasChildren = (node.children?.length ?? 0) > 0
+      const level = levelFor(isRoot, hasChildren)
       this.stmts.insertPlanNode.run({
         id,
         project_id: projectId,
@@ -1251,13 +1255,13 @@ export class Queries {
         created_at: now,
         completed_at: null,
       })
-      const children = node.children?.map((c, i) => insertRecursive(c, id, depth + 1, i)) ?? []
+      const children = node.children?.map((c, i) => insertRecursive(c, id, i)) ?? []
       const inserted = toPlanNode(this.stmts.selectPlanNode.get(id) as PlanNodeRow)
       if (children.length) inserted.children = children
       return inserted
     }
 
-    return this.db.transaction(() => insertRecursive(input, null, 0, 0))()
+    return this.db.transaction(() => insertRecursive(input, null, 0))()
   }
 
   /**
@@ -1304,14 +1308,26 @@ export class Queries {
       }
     }
 
-    // Walk the subtree. For each non-leaf, set progress = {done: direct
-    // children that are effectively-done, total: direct children count}.
-    // Returns whether this node itself is effectively-done.
-    // Depth-agnostic: works correctly at any nesting level.
+    // Walk the subtree. For each container (level='plan'|'step'), set
+    // progress = {done: direct children that are complete, total: direct
+    // children count}. Returns whether this node itself is complete.
+    //
+    // Completeness rule (level-aware, depth-agnostic):
+    //   - level='task' (leaf-by-design): complete iff status='done'.
+    //   - level='plan'|'step' (container): complete iff has at least one
+    //     child AND every child is complete.
+    //
+    // Containers with no children are NEVER complete — status='done' on an
+    // empty container is meaningless for the rollup. The level enum is what
+    // distinguishes "this is a leaf, status drives" from "this is a
+    // container, children drive."
     const walkAndSetProgress = (node: PlanNode): boolean => {
-      if (!node.children || node.children.length === 0) {
-        // Leaf: effectively-done iff status === 'done'.
+      if (node.level === 'task') {
         return node.status === 'done'
+      }
+      // 'plan' or 'step' — container semantics.
+      if (!node.children || node.children.length === 0) {
+        return false
       }
       let doneCount = 0
       for (const c of node.children) {
