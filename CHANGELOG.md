@@ -55,12 +55,13 @@ Plain string still works — coerced to `{subject, kind:'open'}`. Watch notes dr
 
 ### Migrations
 
-Four automatic SQLite migrations apply on first use (`v6`, `v7`, `v8`, `v9`). No manual step required.
+Five automatic SQLite migrations apply on first use (`v6`, `v7`, `v8`, `v9`, `v10`). No manual step required.
 
 - `v6` — `threads.kind` (default `'open'`) + `threads.last_touched_commit`
 - `v7` — new `trace` table with indexes for windowed retrieval
 - `v8` — new `thread_archive` table + one-time sweep of currently-stale threads
 - `v9` — new `plan_nodes` table (planning hierarchy)
+- `v10` — backfill `threads.last_touched_commit` and `thread_archive.last_touched_commit` from `opened_in_commit` where NULL (legacy rows opened before v6)
 
 ### Thread lifecycle and close ergonomics
 

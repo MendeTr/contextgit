@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runMigrations, sweepStaleThreadsOnMigration } from './migrations.js'
+import { SCHEMA_V10_DDL } from './schema.js'
 
 describe('thread_archive table (v8 migration)', () => {
   let db: Database.Database
@@ -239,5 +240,62 @@ describe('thread_archive table (v8 migration)', () => {
     expect(inThreads).toBeUndefined()
     const inArchive = db.prepare(`SELECT id FROM thread_archive WHERE id = 'old-thread'`).get()
     expect(inArchive).toBeDefined()
+  })
+
+  it('v10 migration backfills threads.last_touched_commit from opened_in_commit where NULL', () => {
+    // Simulate a pre-v6 row: insert a thread directly with last_touched_commit = NULL
+    // (mimics rows that pre-dated migration v6's ALTER TABLE ADD COLUMN).
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_bf', 'p_bf', ?)`).run(now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b_bf', 'p_bf', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c_bf', 'b_bf', 'a', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+    // Directly insert with last_touched_commit = NULL (simulating pre-v6 row state).
+    db.prepare(
+      `INSERT INTO threads (id, project_id, branch_id, description, status, kind, opened_in_commit, last_touched_commit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('t_legacy', 'p_bf', 'b_bf', 'legacy thread', 'open', 'open', 'c_bf', null, now)
+    // Also seed an archived row with NULL last_touched_commit.
+    db.prepare(
+      `INSERT INTO thread_archive (id, project_id, branch_id, description, status, kind, opened_in_commit, last_touched_commit, created_at, archived_at, archived_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('a_legacy', 'p_bf', 'b_bf', 'legacy archive', 'closed', 'open', 'c_bf', null, now, now, 'manual')
+
+    // Pre-condition: both rows have NULL last_touched_commit.
+    expect((db.prepare(`SELECT last_touched_commit FROM threads WHERE id = 't_legacy'`).get() as { last_touched_commit: string | null }).last_touched_commit).toBeNull()
+    expect((db.prepare(`SELECT last_touched_commit FROM thread_archive WHERE id = 'a_legacy'`).get() as { last_touched_commit: string | null }).last_touched_commit).toBeNull()
+
+    // runMigrations was called in beforeEach so v10 has already applied. To
+    // exercise the backfill SQL on rows we just seeded (which were inserted
+    // AFTER the migration ran), re-execute the v10 statements manually.
+    for (const sql of SCHEMA_V10_DDL) db.exec(sql)
+
+    // After backfill: both should equal opened_in_commit.
+    expect((db.prepare(`SELECT last_touched_commit FROM threads WHERE id = 't_legacy'`).get() as { last_touched_commit: string }).last_touched_commit).toBe('c_bf')
+    expect((db.prepare(`SELECT last_touched_commit FROM thread_archive WHERE id = 'a_legacy'`).get() as { last_touched_commit: string }).last_touched_commit).toBe('c_bf')
+  })
+
+  it('v10 migration leaves already-populated last_touched_commit alone', () => {
+    const now = Date.now()
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_keep', 'p_keep', ?)`).run(now)
+    db.prepare(
+      `INSERT INTO branches (id, project_id, name, git_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('b_keep', 'p_keep', 'main', 'main', 'active', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c_opened', 'b_keep', 'a', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now)
+    db.prepare(
+      `INSERT INTO commits (id, branch_id, agent_id, agent_role, tool, workflow_type, message, content, summary, commit_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('c_touched', 'b_keep', 'a', 'solo', 't', 'interactive', 'm', 'c', 's', 'manual', now + 1000)
+    // Thread with last_touched_commit explicitly set to a different commit.
+    db.prepare(
+      `INSERT INTO threads (id, project_id, branch_id, description, status, kind, opened_in_commit, last_touched_commit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('t_touched', 'p_keep', 'b_keep', 'touched thread', 'open', 'open', 'c_opened', 'c_touched', now)
+
+    for (const sql of SCHEMA_V10_DDL) db.exec(sql)
+
+    // Should still point to c_touched, NOT overwritten to c_opened.
+    expect((db.prepare(`SELECT last_touched_commit FROM threads WHERE id = 't_touched'`).get() as { last_touched_commit: string }).last_touched_commit).toBe('c_touched')
   })
 })

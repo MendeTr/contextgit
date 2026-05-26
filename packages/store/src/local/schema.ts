@@ -247,3 +247,15 @@ export const SCHEMA_V9_DDL = [
   `CREATE INDEX IF NOT EXISTS idx_plan_nodes_project ON plan_nodes(project_id, level, status)`,
   `CREATE INDEX IF NOT EXISTS idx_plan_nodes_parent  ON plan_nodes(parent_id)`,
 ]
+
+// Migration v10 backfills threads.last_touched_commit and
+// thread_archive.last_touched_commit from opened_in_commit on rows where it's
+// NULL. Migration v6 added the column as nullable without backfilling — rows
+// opened before v6 carried NULL forever. The decay logic falls back to
+// opened_in_commit so behavior was technically correct, but the field being
+// NULL is misleading and makes manual inspection hard. New thread inserts
+// (insertThread) already populate it; this just fixes legacy rows.
+export const SCHEMA_V10_DDL = [
+  `UPDATE threads SET last_touched_commit = opened_in_commit WHERE last_touched_commit IS NULL`,
+  `UPDATE thread_archive SET last_touched_commit = opened_in_commit WHERE last_touched_commit IS NULL`,
+]

@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, SCHEMA_V7_DDL, SCHEMA_V8_DDL, SCHEMA_V9_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
+import { SCHEMA_V1_DDL, SCHEMA_V2_DDL, SCHEMA_V3_DDL, SCHEMA_V4_DDL, SCHEMA_V5_DDL, SCHEMA_V6_DDL, SCHEMA_V7_DDL, SCHEMA_V8_DDL, SCHEMA_V9_DDL, SCHEMA_V10_DDL, CREATE_COMMIT_EMBEDDINGS } from './schema.js'
 import { classifyThread } from '@contextgit/core'
 import type { Thread } from '@contextgit/core'
 
@@ -120,6 +120,19 @@ const MIGRATIONS: Migration[] = [
         db.exec(sql)
       }
       // No sweep. Planning is structurally exempt from staleness — it never decays.
+    },
+  },
+  {
+    version: 10,
+    name: 'backfill_last_touched_commit',
+    run(db) {
+      // Backfill: rows opened before v6 had last_touched_commit added as NULL
+      // (v6 was ALTER-only, no UPDATE). Decay logic falls back to
+      // opened_in_commit so behavior is correct, but the NULL is misleading.
+      // Set it explicitly so the field is trustworthy at the data layer.
+      for (const sql of SCHEMA_V10_DDL) {
+        db.exec(sql)
+      }
     },
   },
 ]
