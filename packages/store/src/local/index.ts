@@ -295,6 +295,39 @@ export class LocalStore implements ContextStore {
           }
         }
 
+        // 04 DELTA: completesTasks — atomic resolve handle → title.
+        // Already-done is a no-op success (agent's intent is satisfied).
+        // Whole save fails if any entry stays unresolved.
+        if (input.completesTasks?.length) {
+          for (const raw of input.completesTasks) {
+            const candidate = raw.trim()
+            const handle = candidate.slice(0, 6)
+
+            // 1. Try as handle
+            const byHandle = this.q.findPlanNodeByHandle(branch.projectId, handle)
+            if (byHandle) {
+              if (byHandle.status !== 'done') {
+                this.q.updatePlanNodeStatus(byHandle.id, 'done', commitId)
+              }
+              continue
+            }
+
+            // 2. Try as exact title
+            const byTitle = this.q.findPlanNodeByTitle(branch.projectId, candidate)
+            if (byTitle) {
+              if (byTitle.status !== 'done') {
+                this.q.updatePlanNodeStatus(byTitle.id, 'done', commitId)
+              }
+              continue
+            }
+
+            // 3. Unresolved — abort the whole save.
+            throw new Error(
+              `completesTasks: no plan node matched '${candidate}' (tried as handle and title)`,
+            )
+          }
+        }
+
         // Update branch HEAD
         this.q.updateBranchHead(input.branchId, commitId)
 
@@ -428,6 +461,66 @@ export class LocalStore implements ContextStore {
   restoreAllArchivedByReason(projectId: string, reasons: import('@contextgit/core').ArchivedThread['archivedReason'][]): Promise<number> {
     try {
       return Promise.resolve(this.q.restoreAllArchivedByReason(projectId, reasons))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  // ─── Planning hierarchy (04 DELTA) ────────────────────────────────────────
+
+  insertPlanTree(projectId: string, input: import('@contextgit/core').PlanNodeInput): Promise<import('@contextgit/core').PlanNode> {
+    try {
+      return Promise.resolve(this.q.insertPlanTree(projectId, input))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  getPlanTree(projectId: string): Promise<import('@contextgit/core').PlanNode[]> {
+    try {
+      return Promise.resolve(this.q.getPlanTree(projectId))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  listCompletedPlans(projectId: string): Promise<import('@contextgit/core').PlanNode[]> {
+    try {
+      return Promise.resolve(this.q.listCompletedPlans(projectId))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  updatePlanNodeStatus(id: string, status: import('@contextgit/core').PlanNodeStatus, gitCommitSha: string | null): Promise<void> {
+    try {
+      this.q.updatePlanNodeStatus(id, status, gitCommitSha)
+      return Promise.resolve()
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  updatePlanNodeTitle(id: string, title: string): Promise<void> {
+    try {
+      this.q.updatePlanNodeTitle(id, title)
+      return Promise.resolve()
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  findPlanNodeByHandle(projectId: string, handle: string): Promise<import('@contextgit/core').PlanNode | undefined> {
+    try {
+      return Promise.resolve(this.q.findPlanNodeByHandle(projectId, handle))
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+
+  findPlanNodeByTitle(projectId: string, title: string): Promise<import('@contextgit/core').PlanNode | undefined> {
+    try {
+      return Promise.resolve(this.q.findPlanNodeByTitle(projectId, title))
     } catch (e) {
       return Promise.reject(e)
     }

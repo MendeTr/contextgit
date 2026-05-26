@@ -11,6 +11,9 @@ import type {
   CommitInput,
   ContextDelta,
   Pagination,
+  PlanNode,
+  PlanNodeInput,
+  PlanNodeStatus,
   Project,
   ProjectInput,
   SearchResult,
@@ -55,6 +58,15 @@ export interface ContextStore {
   findArchivedThreadByHandle?(projectId: string, handle: string): Promise<ArchivedThread | undefined>
   sweepStaleThreads?(projectId: string, now: number): Promise<{ archived: number; byReason: Record<'stale-age' | 'stale-distance' | 'watch-expired', number> }>
   restoreAllArchivedByReason?(projectId: string, reasons: ArchivedThread['archivedReason'][]): Promise<number>
+
+  // Planning hierarchy (04 DELTA) — optional until SupabaseStore/RemoteStore implement
+  insertPlanTree?(projectId: string, input: PlanNodeInput): Promise<PlanNode>
+  getPlanTree?(projectId: string): Promise<PlanNode[]>
+  listCompletedPlans?(projectId: string): Promise<PlanNode[]>
+  updatePlanNodeStatus?(id: string, status: PlanNodeStatus, gitCommitSha: string | null): Promise<void>
+  updatePlanNodeTitle?(id: string, title: string): Promise<void>
+  findPlanNodeByHandle?(projectId: string, handle: string): Promise<PlanNode | undefined>
+  findPlanNodeByTitle?(projectId: string, title: string): Promise<PlanNode | undefined>
 
   // Trace tier (02 DELTA Step 5) — append-only, pull-only, NEVER auto-loaded.
   // Optional on the interface: legacy stores may not implement these yet.

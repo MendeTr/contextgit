@@ -792,4 +792,113 @@ describe('LocalStore (in-memory)', () => {
     expect(threads).toHaveLength(2)
     expect(threads.map((t) => t.description).sort()).toEqual(['Subject A', 'Subject B'])
   })
+
+  // ─── 04 DELTA planning hierarchy ─────────────────────────────────────────
+
+  it('LocalStore plan-tree round-trip: insertPlanTree → getPlanTree → updatePlanNodeStatus → completed', async () => {
+    const project = await store.createProject({ name: 'p' })
+
+    const plan = await store.insertPlanTree!(project.id, {
+      title: 'Plan Z',
+      children: [{ title: 'Step 1', children: [{ title: 'Task A' }] }],
+    })
+    expect(plan.level).toBe('plan')
+    expect(plan.children?.[0].children?.[0].title).toBe('Task A')
+
+    const active = await store.getPlanTree!(project.id)
+    expect(active).toHaveLength(1)
+
+    const taskId = plan.children![0].children![0].id
+    await store.updatePlanNodeStatus!(taskId, 'done', null)
+
+    expect(await store.getPlanTree!(project.id)).toHaveLength(0)
+    expect((await store.listCompletedPlans!(project.id))[0].title).toBe('Plan Z')
+  })
+
+  it('SessionSnapshot.planTree is populated from getPlanTree', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.insertPlanTree!(project.id, {
+      title: 'In-progress plan',
+      children: [{ title: 'S', children: [{ title: 'T' }] }],
+    })
+    const snap = await store.getSessionSnapshot(project.id, branch.id)
+    expect(snap.planTree).toBeDefined()
+    expect(snap.planTree!.length).toBe(1)
+    expect(snap.planTree![0].title).toBe('In-progress plan')
+  })
+
+  it('createCommit completesTasks — handle match marks the task done', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    const plan = await store.insertPlanTree!(project.id, {
+      title: 'P', children: [{ title: 'S', children: [{ title: 'T1' }] }],
+    })
+    const taskId = plan.children![0].children![0].id
+    const handle = taskId.slice(0, 6)
+
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'done T1', content: 'x', summary: 'x',
+      commitType: 'manual',
+      completesTasks: [handle],
+    })
+
+    expect(await store.listCompletedPlans!(project.id)).toHaveLength(1)
+  })
+
+  it('createCommit completesTasks — title match marks the task done', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.insertPlanTree!(project.id, {
+      title: 'P', children: [{ title: 'S', children: [{ title: 'Specific Task Title' }] }],
+    })
+
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'done', content: 'x', summary: 'x',
+      commitType: 'manual',
+      completesTasks: ['Specific Task Title'],
+    })
+
+    expect(await store.listCompletedPlans!(project.id)).toHaveLength(1)
+  })
+
+  it('createCommit completesTasks — already-done node is a no-op success', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    const plan = await store.insertPlanTree!(project.id, {
+      title: 'P', children: [{ title: 'S', children: [{ title: 'T' }] }],
+    })
+    const taskId = plan.children![0].children![0].id
+    const handle = taskId.slice(0, 6)
+    await store.updatePlanNodeStatus!(taskId, 'done', 'prior-commit')
+
+    // Same handle on a new save — must NOT throw.
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'c', content: 'y', summary: 'y',
+      commitType: 'manual',
+      completesTasks: [handle],
+    })
+    expect(await store.listCompletedPlans!(project.id)).toHaveLength(1)
+  })
+
+  it('createCommit completesTasks — no match aborts the entire save atomically', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    const before = (await store.listCommits(branch.id, { limit: 100, offset: 0 })).length
+
+    await expect(
+      store.createCommit({
+        branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+        workflowType: 'interactive', message: 'c', content: 'y', summary: 'y',
+        commitType: 'manual',
+        completesTasks: ['xxxxxx-bogus'],
+      }),
+    ).rejects.toThrow(/completesTasks/)
+
+    const after = (await store.listCommits(branch.id, { limit: 100, offset: 0 })).length
+    expect(after).toBe(before)
+  })
 })

@@ -1126,6 +1126,8 @@ export class Queries {
     const allCommits = this.listCommits(branchId, { limit: 1, offset: 0 })
     const isInitiated = mainBranch?.headCommitId != null || allCommits.length > 0
 
+    const planTree = this.getPlanTree(projectId)
+
     return {
       projectSummary,
       branchName: branch?.name ?? '',
@@ -1136,6 +1138,7 @@ export class Queries {
       isInitiated,
       staleThreadCount,
       expiredWatchCount,
+      planTree,
     }
   }
 

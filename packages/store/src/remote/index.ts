@@ -341,4 +341,25 @@ export class RemoteStore implements ContextStore {
   restoreAllArchivedByReason(): never {
     throw new Error('restoreAllArchivedByReason: not implemented in 0.2.0 — LocalStore only')
   }
+  insertPlanTree(): never {
+    throw new Error('insertPlanTree: not implemented in 0.2.0 — LocalStore only')
+  }
+  getPlanTree(): never {
+    throw new Error('getPlanTree: not implemented in 0.2.0 — LocalStore only')
+  }
+  listCompletedPlans(): never {
+    throw new Error('listCompletedPlans: not implemented in 0.2.0 — LocalStore only')
+  }
+  updatePlanNodeStatus(): never {
+    throw new Error('updatePlanNodeStatus: not implemented in 0.2.0 — LocalStore only')
+  }
+  updatePlanNodeTitle(): never {
+    throw new Error('updatePlanNodeTitle: not implemented in 0.2.0 — LocalStore only')
+  }
+  findPlanNodeByHandle(): never {
+    throw new Error('findPlanNodeByHandle: not implemented in 0.2.0 — LocalStore only')
+  }
+  findPlanNodeByTitle(): never {
+    throw new Error('findPlanNodeByTitle: not implemented in 0.2.0 — LocalStore only')
+  }
 }
