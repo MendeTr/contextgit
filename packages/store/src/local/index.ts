@@ -251,12 +251,21 @@ export class LocalStore implements ContextStore {
           }
         }
 
+        // Reason for archived rows in this save:
+        //   'manual'        — exactly 1 thread closed (singular, explicit close)
+        //   'bulk-cleanup'  — multiple threads closed atomically in one save
+        // The audit trail distinguishes "I closed THIS thread for a reason" from
+        // "I batch-closed N threads in one cleanup pass."
+        const totalCloses =
+          (input.threads?.close?.length ?? 0) +
+          (input.threads?.closes?.length ?? 0)
+        const closeReason: 'manual' | 'bulk-cleanup' = totalCloses > 1 ? 'bulk-cleanup' : 'manual'
+
         if (input.threads?.close?.length) {
-          // Legacy direct-ID close path — archive with reason='manual'. closed_note
-          // from the legacy shape is currently dropped (no archive column for it,
-          // and no live caller depends on it).
+          // Legacy direct-ID close path. closed_note from the legacy shape is
+          // dropped (no archive column for it, no live caller depends on it).
           for (const { id } of input.threads.close) {
-            this.q.archiveThread(id, 'manual', commitId)
+            this.q.archiveThread(id, closeReason, commitId)
           }
         }
 
@@ -270,7 +279,7 @@ export class LocalStore implements ContextStore {
             // 1. Try as handle in open threads
             const byHandle = this.q.findOpenThreadByHandle(branch.projectId, handle)
             if (byHandle) {
-              this.q.archiveThread(byHandle.id, 'manual', commitId)
+              this.q.archiveThread(byHandle.id, closeReason, commitId)
               continue
             }
 
@@ -278,7 +287,7 @@ export class LocalStore implements ContextStore {
             const normalized = normalizeThreadSubject(candidate)
             const bySubject = this.q.findOpenThreadByNormalizedDescription(branch.projectId, normalized)
             if (bySubject) {
-              this.q.archiveThread(bySubject.id, 'manual', commitId)
+              this.q.archiveThread(bySubject.id, closeReason, commitId)
               continue
             }
 

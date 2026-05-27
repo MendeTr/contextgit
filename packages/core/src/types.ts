@@ -113,7 +113,12 @@ export interface Thread {
   expired?: boolean          // derived at read time — applies to kind='watch' only
 }
 
-export type ArchivedReason = 'stale-age' | 'stale-distance' | 'watch-expired' | 'manual'
+export type ArchivedReason =
+  | 'stale-age'        // decay sweep: age signal (>=14d untouched) AND distance signal fired
+  | 'stale-distance'   // decay sweep: distance signal (>=30 branch commits) AND age signal fired
+  | 'watch-expired'    // watch thread past its TTL
+  | 'manual'           // single explicit close (one thread per call)
+  | 'bulk-cleanup'     // batch explicit close (>1 thread closed in one save / one call)
 
 export interface ArchivedThread extends Thread {
   archivedAt: Date

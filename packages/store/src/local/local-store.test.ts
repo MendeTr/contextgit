@@ -764,6 +764,81 @@ describe('LocalStore (in-memory)', () => {
     expect(after).toBe(before)
   })
 
+  it('createCommit closesThreads — singular close (N=1) writes archived_reason="manual"', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'open', content: 'x', summary: 'x',
+      commitType: 'manual',
+      threads: { open: ['only-one'] },
+    })
+    const open = await store.listOpenThreads(project.id)
+    const handle = open[0].id.slice(0, 6)
+
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'close', content: 'y', summary: 'y',
+      commitType: 'manual',
+      threads: { closes: [handle] },
+    })
+
+    const archived = await store.listArchivedThreads!(project.id)
+    expect(archived).toHaveLength(1)
+    expect(archived[0].archivedReason).toBe('manual')
+  })
+
+  it('createCommit closesThreads — batch close (N>1) writes archived_reason="bulk-cleanup"', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'open three', content: 'x', summary: 'x',
+      commitType: 'manual',
+      threads: { open: ['t-1', 't-2', 't-3'] },
+    })
+    const open = await store.listOpenThreads(project.id)
+    expect(open).toHaveLength(3)
+    const handles = open.map((t) => t.id.slice(0, 6))
+
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'close three', content: 'y', summary: 'y',
+      commitType: 'manual',
+      threads: { closes: handles },
+    })
+
+    const archived = await store.listArchivedThreads!(project.id)
+    expect(archived).toHaveLength(3)
+    for (const a of archived) {
+      expect(a.archivedReason).toBe('bulk-cleanup')
+    }
+  })
+
+  it('createCommit legacy threads.close — singular vs batch follows the same rule', async () => {
+    const project = await store.createProject({ name: 'p' })
+    const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'o', content: 'x', summary: 'x',
+      commitType: 'manual',
+      threads: { open: ['L1', 'L2'] },
+    })
+    const open = await store.listOpenThreads(project.id)
+
+    // Batch (N=2) via legacy close path
+    await store.createCommit({
+      branchId: branch.id, agentId: 'a', agentRole: 'solo', tool: 't',
+      workflowType: 'interactive', message: 'close batch', content: 'y', summary: 'y',
+      commitType: 'manual',
+      threads: { close: open.map((t) => ({ id: t.id, note: 'closed' })) },
+    })
+
+    const archived = await store.listArchivedThreads!(project.id)
+    expect(archived).toHaveLength(2)
+    for (const a of archived) expect(a.archivedReason).toBe('bulk-cleanup')
+  })
+
   it('opens distinct threads when normalized subjects differ', async () => {
     const project = await store.createProject({ name: 'p' })
     const branch = await store.createBranch({ projectId: project.id, name: 'main', gitBranch: 'main' })
