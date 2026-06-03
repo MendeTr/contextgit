@@ -1,6 +1,28 @@
 # Changelog
 
-## 0.2.0 — 2026-05-22
+## 0.2.2 — 2026-06-03
+
+A bugfix release for plan-node completeness.
+
+### Fixed
+
+**A plan/step you mark `done` is now honored.** Previously, a container's own status was ignored when computing completeness and rollups — only its children counted. So a step you explicitly marked `status='done'` rendered `○` (pending) in the snapshot and was excluded from its parent's `[X/Y done]` rollup. A fresh session reading the snapshot could report shipped work as "not started" and recommend an already-finished milestone as the next task.
+
+The completeness rule is now:
+
+```
+container.complete = (status === 'done') OR (has children AND all children complete)
+```
+
+This is applied identically in both places that derive completeness — the store rollup (`getPlanTree`) and the snapshot renderer — so the `✓`/`○` markers and the `[X/Y done]` counts always agree. The "next task" walk (`← next`) now skips the subtree of any done container, so a finished step never surfaces a spurious next-task pointer from a child that was deferred or completed elsewhere.
+
+Marking a container `done` does **not** cascade to its children. A done container may legitimately contain children that were deferred, abandoned, or completed by other means; status is set independently per node.
+
+### Known limitation
+
+A plan node's `level` (plan/step/task) is fixed when the tree is first inserted and is never re-derived; there is no API to add children, reparent, or delete nodes after creation. Re-deriving level (or a migration for legacy rows) is tracked for a future 0.3.x release.
+
+## 0.2.0 — 2026-05-27 
 
 A focused release implementing the three-tier memory model (DELTA spec `02`). Two independent audits — Claude Code usage and the GCC paper (Wu et al., arXiv:2508.00031v2) — pointed at the same defect: ContextGit stored too much of what git already knows and too little of what it doesn't. 0.2.0 fixes that.
 
