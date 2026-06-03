@@ -173,9 +173,13 @@ Project config lives at `.contextgit/config.json`:
 }
 ```
 
+## What's new in 0.2.2
+
+Bugfix release for plan-node completeness. A plan or step you explicitly mark `done` is now honored: the completeness rule is `container.complete = (status === 'done') OR (has children AND all children complete)`. Previously a container's own status was ignored, so a step you'd marked done rendered as pending (`○`) and dropped out of its parent's `[X/Y done]` rollup — a fresh session could report shipped work as "not started." The marker and the rollup now derive from one rule and always agree, and the `← next` pointer skips the subtree of a done container. Marking a container done does not cascade to its children (their stored status is left intact). See [CHANGELOG.md](./CHANGELOG.md) for the full notes.
+
 ## Current status
 
-Early-stage but solid for solo developers using Claude Code across one or more machines. As of 0.2.0 the memory layer is structured into three tiers — a live roadmap, commit-bound context saves, and a pull-only reasoning trace — with a plan hierarchy, automatic thread decay, and windowed retrieval. See [CHANGELOG.md](./CHANGELOG.md) for the full 0.2.0 changes.
+Early-stage but solid for solo developers using Claude Code across one or more machines. As of 0.2.0 the memory layer is structured into three tiers — a live roadmap, commit-bound context saves, and a pull-only reasoning trace — with a plan hierarchy, automatic thread decay, and windowed retrieval. See [CHANGELOG.md](./CHANGELOG.md) for the full changes.
 
 ## Known limitations
 

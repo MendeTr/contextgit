@@ -16,7 +16,11 @@ container.complete = (status === 'done') OR (has children AND all children compl
 
 This is applied identically in both places that derive completeness — the store rollup (`getPlanTree`) and the snapshot renderer — so the `✓`/`○` markers and the `[X/Y done]` counts always agree. The "next task" walk (`← next`) now skips the subtree of any done container, so a finished step never surfaces a spurious next-task pointer from a child that was deferred or completed elsewhere.
 
-Marking a container `done` does **not** cascade to its children. A done container may legitimately contain children that were deferred, abandoned, or completed by other means; status is set independently per node.
+Marking a container `done` does **not** cascade to its children. A done container may legitimately contain children that were deferred, abandoned, or completed by other means; status is set independently per node. This corrects the misleading display only — it is not a literal cascade, so child rows keep their own stored status. Propagating completion into stored child statuses, if ever wanted, would be a separate enhancement.
+
+### Known behavior — after upgrading
+
+The completeness rule runs at *read time*, so `project_memory_load` reflects the fix immediately on the upgraded server. The on-disk `CLAUDE.contextgit.md` (which `CLAUDE.md` `@`-includes) is only rewritten on the next `project_memory_save`, so right after upgrading, the live MCP read and the on-disk file can momentarily disagree until the next save re-syncs it. A fresh session loads via `project_memory_load`, so it sees the correct state; to refresh the on-disk file immediately, run any `project_memory_save`.
 
 ### Known limitation
 
