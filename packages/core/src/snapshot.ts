@@ -38,25 +38,42 @@ function gitFactsLine(branchName: string, headSha?: string, commitCount?: number
 
 /**
  * Render the active plan tree as nested lines with status markers (04 DELTA).
- *   ✓  complete (task with status='done', or container with all children complete)
- *   →  the single "next" pending task — first pending task in document order
+ *   ✓  complete (task with status='done', or container that is status='done'
+ *      OR has all children complete)
+ *   →  the single "next" pending task — first pending task in document order,
+ *      skipping subtrees of done containers
  *   ▸  in-progress (task) or partial (container with some children complete)
  *   ○  not started / empty container / pending
  *
  * The marker uses the same `isComplete` rule that drives the [n/m done]
- * rollup — display and rollup are derived from one definition. Containers
- * (plan/step) need children to be complete; status='done' alone on an empty
- * container doesn't make it ✓ (matches queries.ts walkAndSetProgress).
+ * rollup — display and rollup are derived from one definition. A container
+ * (plan/step) is complete when its own status='done' OR all its children are
+ * complete (0.2.2 "honor container status"; matches queries.ts
+ * walkAndSetProgress).
  *
  * Returns null when the tree is empty.
  */
 function renderPlanTree(tree: PlanNode[]): string | null {
   if (!tree || tree.length === 0) return null
 
-  // Find the single "next" pending task (depth-first document order)
+  // Mirror of queries.ts walkAndSetProgress — single source of truth for what
+  // "complete" means at any depth. Used here so the marker matches the rollup.
+  // 0.2.2: an explicit status='done' on a container is honored regardless of
+  // child state.
+  const isComplete = (n: PlanNode): boolean => {
+    if (n.level === 'task') return n.status === 'done'
+    if (n.status === 'done') return true
+    if (!n.children || n.children.length === 0) return false
+    return n.children.every(isComplete)
+  }
+
+  // Find the single "next" pending task (depth-first document order), skipping
+  // any subtree rooted at a complete container — a done step never surfaces a
+  // spurious ← next from its (possibly deferred) children.
   let nextTaskId: string | null = null
   const findNext = (nodes: PlanNode[]): boolean => {
     for (const n of nodes) {
+      if (isComplete(n)) continue
       if (n.level === 'task' && n.status === 'pending') {
         nextTaskId = n.id
         return true
@@ -66,14 +83,6 @@ function renderPlanTree(tree: PlanNode[]): string | null {
     return false
   }
   findNext(tree)
-
-  // Mirror of queries.ts walkAndSetProgress — single source of truth for what
-  // "complete" means at any depth. Used here so the marker matches the rollup.
-  const isComplete = (n: PlanNode): boolean => {
-    if (n.level === 'task') return n.status === 'done'
-    if (!n.children || n.children.length === 0) return false
-    return n.children.every(isComplete)
-  }
 
   const lines: string[] = []
   const render = (node: PlanNode, depth: number) => {

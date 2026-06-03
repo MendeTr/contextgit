@@ -364,4 +364,49 @@ describe('SnapshotFormatter inline claim status', () => {
     expect(out).toContain('=== PLAN ===')
     expect(out).toContain('Test plan')
   })
+
+  it('agents-md: a done container renders ✓ and the ← next walk skips its subtree (0.2.2)', () => {
+    // 0.2.2 honor-container-status: a step the user marked status='done' renders ✓
+    // even with pending children, and the "find first pending task" walk must skip
+    // the done subtree so a finished step never flags a spurious ← next.
+    const snapshot = makeSnapshot({
+      planTree: [
+        {
+          id: 'plan-root12345', projectId: 'p', level: 'plan', title: 'Phase 1',
+          status: 'pending', position: 0, createdAt: new Date(),
+          progress: { done: 1, total: 2 },
+          children: [
+            {
+              // Done step with a still-pending child — must render ✓, child no ← next.
+              id: 'step-done12345', projectId: 'p', parentId: 'plan-root12345', level: 'step',
+              title: 'Shipped step', status: 'done', position: 0, createdAt: new Date(),
+              progress: { done: 0, total: 1 },
+              children: [
+                { id: 'task-skip12345', projectId: 'p', parentId: 'step-done12345', level: 'task',
+                  title: 'Deferred subtask', status: 'pending', position: 0, createdAt: new Date() },
+              ],
+            },
+            {
+              id: 'step-open12345', projectId: 'p', parentId: 'plan-root12345', level: 'step',
+              title: 'Open step', status: 'pending', position: 1, createdAt: new Date(),
+              progress: { done: 0, total: 1 },
+              children: [
+                { id: 'task-next12345', projectId: 'p', parentId: 'step-open12345', level: 'task',
+                  title: 'Real next task', status: 'pending', position: 0, createdAt: new Date() },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const out = formatter.format(snapshot, 'agents-md')
+    // The done step renders ✓ despite its pending child.
+    expect(out).toContain('✓ Shipped step')
+    // ← next lands on the real next task in the open step, not the deferred subtask.
+    expect(out).toContain('→ Real next task')
+    expect(out).toMatch(/Real next task.*← next/)
+    expect(out).not.toMatch(/Deferred subtask.*← next/)
+    // The deferred subtask under a done container is not flagged → next.
+    expect(out).not.toContain('→ Deferred subtask')
+  })
 })

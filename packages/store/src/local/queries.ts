@@ -1312,29 +1312,30 @@ export class Queries {
     // progress = {done: direct children that are complete, total: direct
     // children count}. Returns whether this node itself is complete.
     //
-    // Completeness rule (level-aware, depth-agnostic):
+    // Completeness rule (level-aware, depth-agnostic) — 0.2.2 decision A,
+    // "honor container status":
     //   - level='task' (leaf-by-design): complete iff status='done'.
-    //   - level='plan'|'step' (container): complete iff has at least one
-    //     child AND every child is complete.
+    //   - level='plan'|'step' (container): complete iff
+    //       status='done' OR (has at least one child AND every child complete).
     //
-    // Containers with no children are NEVER complete — status='done' on an
-    // empty container is meaningless for the rollup. The level enum is what
-    // distinguishes "this is a leaf, status drives" from "this is a
-    // container, children drive."
+    // An explicit status='done' on a container is honored regardless of child
+    // state — a step the user checked off is done even if some children were
+    // deferred or abandoned. Marking a container done does NOT cascade to its
+    // children; status is set independently per node.
     const walkAndSetProgress = (node: PlanNode): boolean => {
       if (node.level === 'task') {
         return node.status === 'done'
       }
       // 'plan' or 'step' — container semantics.
       if (!node.children || node.children.length === 0) {
-        return false
+        return node.status === 'done'
       }
       let doneCount = 0
       for (const c of node.children) {
         if (walkAndSetProgress(c)) doneCount++
       }
       node.progress = { done: doneCount, total: node.children.length }
-      return doneCount === node.children.length
+      return node.status === 'done' || doneCount === node.children.length
     }
 
     const tops: PlanNode[] = []

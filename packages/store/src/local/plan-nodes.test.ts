@@ -172,14 +172,13 @@ describe('plan_nodes table (v9 migration)', () => {
     expect(phase1.children![1].progress).toBeUndefined()
   })
 
-  it('getPlanTree: status=done on an empty step does NOT count as complete (containers need children)', async () => {
-    // Reproduces the second user bug report (after the depth-cap fix):
-    //   Phase 1 [3/9] but no direct child shows ✓ → the "3" matches no rule.
-    // Cause: 3 of Phase 1's children are level='step' with status='done' and
-    // zero children. The previous fix counted them as "leaf-complete" because
-    // they had no children. The right rule: a 'step' or 'plan' is only complete
-    // when it has children AND all children complete. status='done' on an empty
-    // container is meaningless for the rollup.
+  it('getPlanTree: status=done on a step is honored — the container counts as complete (0.2.2)', async () => {
+    // 0.2.2 decision A — honor container status. The rule:
+    //   container.complete = (status='done') OR (hasChildren AND all children complete)
+    // This reverses the 0.2.1 child-derived-only rule, which left a step the user
+    // explicitly marked 'done' rendering ○ and excluded from parent rollups.
+    // Real-world repro (project JiraExtensionAI): steps 1A/1B/1C marked done were
+    // reported as "not started" and Phase 1 rolled up as [0/9] despite shipped work.
     const { Queries } = await import('./queries.js')
     const q = new Queries(db)
     db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_empty_step', 'p_empty_step', 0)`).run()
@@ -193,7 +192,7 @@ describe('plan_nodes table (v9 migration)', () => {
           { title: 'T4' }, { title: 'T5' }, { title: 'T6' },
         ]},
         // 3 placeholder steps that the user later marks status='done' directly
-        // (matches user's 1A/1B/1C). These must NOT count as complete.
+        // (matches user's 1A/1B/1C). These MUST count as complete now.
         { title: '1A' }, { title: '1B' }, { title: '1C' },
         // 5 pending placeholder steps.
         { title: '1D-β' }, { title: '1D-γ' }, { title: '1D-δ' },
@@ -201,10 +200,10 @@ describe('plan_nodes table (v9 migration)', () => {
       ],
     })
 
-    // Note: under the new content-aware level mapping, empty inserts get
-    // level='task'. But the bug specifically targets nodes stored as level='step'
-    // with no children (as in the user's actual data). Force level='step' on the
-    // 3 placeholders we want to mark "done" so the regression covers the real case.
+    // The bug specifically targets nodes stored as level='step' with no children
+    // (as in the user's actual data — created under depth-based level mapping).
+    // Force level='step' on the 3 placeholders so the regression covers the real
+    // case: a childless container the user marks 'done' directly.
     db.prepare(`UPDATE plan_nodes SET level = 'step' WHERE project_id = 'p_empty_step' AND title IN ('1A', '1B', '1C')`).run()
 
     // Mark 4 of 1D-α's 6 tasks done (4/6 — matches user's number).
@@ -219,13 +218,74 @@ describe('plan_nodes table (v9 migration)', () => {
     const trees = q.getPlanTree('p_empty_step')
     const phase1 = trees[0]
 
-    // No direct child of Phase 1 is complete:
-    //   - 1D-α: container with 4/6 children done → not all → incomplete
-    //   - 1A/1B/1C: containers (level='step') with no children → incomplete
-    //   - 5 pending placeholders: leaves or empty containers → incomplete
-    expect(phase1.progress).toEqual({ done: 0, total: 9 })
+    // 3 of Phase 1's 9 direct children are complete:
+    //   - 1D-α: container with 4/6 children done, status pending → incomplete
+    //   - 1A/1B/1C: containers (level='step') with status='done' → complete (honor status)
+    //   - 5 pending placeholders → incomplete
+    expect(phase1.progress).toEqual({ done: 3, total: 9 })
     // Sub-phase 1D-α still correctly rolls up its own tasks.
     expect(phase1.children![0].progress).toEqual({ done: 4, total: 6 })
+  })
+
+  it('getPlanTree: a step status=done with mixed-status children counts as complete (0.2.2)', async () => {
+    // honor-status path: a container the user marks 'done' is complete even when
+    // its children are not all done — children may be deferred/abandoned/done
+    // elsewhere. We do NOT cascade status to children; status is per-node.
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_mixed', 'p_mixed', 0)`).run()
+    const plan = q.insertPlanTree('p_mixed', {
+      title: 'P',
+      children: [
+        { title: 'S1', children: [{ title: 'T1' }, { title: 'T2' }] },
+        { title: 'S2', children: [{ title: 'T3' }] },
+      ],
+    })
+    const s1 = plan.children![0]
+    // S1: one child done, one pending — then mark S1 itself done.
+    q.updatePlanNodeStatus(s1.children![0].id, 'done', null)
+    q.updatePlanNodeStatus(s1.id, 'done', null)
+
+    const trees = q.getPlanTree('p_mixed')
+    // P has 2 direct children; S1 is now complete (status='done'), S2 is not.
+    expect(trees[0].progress).toEqual({ done: 1, total: 2 })
+    // Children are untouched — no cascade.
+    const s1now = trees[0].children!.find((c) => c.id === s1.id)!
+    expect(s1now.status).toBe('done')
+    expect(s1now.children![1].status).toBe('pending')
+  })
+
+  it('getPlanTree: a plan status=done with zero done children is effectively-done (0.2.2)', async () => {
+    // A plan the user marks 'done' is complete regardless of children, so it
+    // leaves the active view and lands in listCompletedPlans.
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_donedplan', 'p_donedplan', 0)`).run()
+    const plan = q.insertPlanTree('p_donedplan', {
+      title: 'Done plan',
+      children: [{ title: 'S', children: [{ title: 'T' }] }],
+    })
+    q.updatePlanNodeStatus(plan.id, 'done', null)
+
+    expect(q.getPlanTree('p_donedplan')).toHaveLength(0)
+    expect(q.listCompletedPlans('p_donedplan')).toHaveLength(1)
+  })
+
+  it('getPlanTree: status=pending with all children done still rolls up complete (OR path intact)', async () => {
+    // The pre-existing child-derived path of the OR must still work.
+    const { Queries } = await import('./queries.js')
+    const q = new Queries(db)
+    db.prepare(`INSERT INTO projects (id, name, created_at) VALUES ('p_orpath', 'p_orpath', 0)`).run()
+    const plan = q.insertPlanTree('p_orpath', {
+      title: 'P', children: [{ title: 'S', children: [{ title: 'T1' }, { title: 'T2' }] }],
+    })
+    const s = plan.children![0]
+    // S stays status='pending' but both its tasks are marked done.
+    for (const t of s.children!) q.updatePlanNodeStatus(t.id, 'done', null)
+
+    // S is pending but all children done → effectively-done → plan complete → excluded.
+    expect(q.getPlanTree('p_orpath')).toHaveLength(0)
+    expect(q.listCompletedPlans('p_orpath')).toHaveLength(1)
   })
 
   it('getPlanTree: a non-leaf is effectively-done when all descendants are done (propagates up)', async () => {
